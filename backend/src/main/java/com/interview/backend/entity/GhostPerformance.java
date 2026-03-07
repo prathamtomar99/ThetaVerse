@@ -2,6 +2,7 @@ package com.interview.backend.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "ghost_performances")
@@ -14,10 +15,11 @@ public class GhostPerformance {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @JsonIgnore
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "target_profile_id")
-    private TargetProfile targetProfile;
+    @JoinColumn(name = "roadmap_id")
+    private Roadmap roadmap;
 
     private Integer lastSyncedTopicIndex;
-    private Double velocity; // Topics per day or hours per day
+    private Double initialFixedVelocity; // Topics per day or hours per day
 }

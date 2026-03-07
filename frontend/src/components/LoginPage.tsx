@@ -1,14 +1,30 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useStoreContext } from "../contextApi/ContextApi";
 import toast from "react-hot-toast";
+import { useState } from "react";
+import { api } from "../api/apiClient";
 
 export default function LoginPage() {
   const { setToken } = useStoreContext();
+  const navigate = useNavigate();
+  
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setToken("mock-jwt-token");
-    toast.success("Successfully logged in!");
+    setLoading(true);
+    try {
+      const response = await api.login({ email, password });
+      setToken(response.data.token);
+      toast.success("Successfully logged in!");
+      navigate("/dashboard");
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Login failed");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -25,6 +41,8 @@ export default function LoginPage() {
               className="bg-neutral-950/50 border border-neutral-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-sans"
               placeholder="you@example.com" 
               required 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
             />
           </div>
           
@@ -38,14 +56,17 @@ export default function LoginPage() {
               className="bg-neutral-950/50 border border-neutral-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-sans"
               placeholder="••••••••" 
               required 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
             />
           </div>
           
           <button 
             type="submit"
-            className="mt-2 w-full bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-3 px-4 rounded-xl transition-colors cursor-pointer"
+            disabled={loading}
+            className="mt-2 w-full bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white font-semibold py-3 px-4 rounded-xl transition-colors cursor-pointer"
           >
-            Sign in
+            {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
 

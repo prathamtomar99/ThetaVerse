@@ -1,16 +1,31 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useStoreContext } from "../contextApi/ContextApi";
 import toast from "react-hot-toast";
+import { useState } from "react";
+import { api } from "../api/apiClient";
 
 export default function RegisterPage() {
   const { setToken } = useStoreContext();
   const navigate = useNavigate();
 
-  const handleRegister = (e: React.FormEvent) => {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    setToken("mock-jwt-token");
-    toast.success("Account created successfully!");
-    navigate("/dashboard");
+    setLoading(true);
+    try {
+      const response = await api.register({ name, email, password });
+      setToken(response.data.token);
+      toast.success("Account created successfully!");
+      navigate("/dashboard");
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Registration failed");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -27,6 +42,8 @@ export default function RegisterPage() {
               className="bg-neutral-950/50 border border-neutral-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-sans"
               placeholder="John Doe" 
               required 
+              value={name}
+              onChange={(e) => setName(e.target.value)}
             />
           </div>
 
@@ -37,6 +54,8 @@ export default function RegisterPage() {
               className="bg-neutral-950/50 border border-neutral-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-sans"
               placeholder="you@example.com" 
               required 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
             />
           </div>
           
@@ -47,14 +66,17 @@ export default function RegisterPage() {
               className="bg-neutral-950/50 border border-neutral-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-sans"
               placeholder="••••••••" 
               required 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
             />
           </div>
           
           <button 
             type="submit"
-            className="mt-2 w-full bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-3 px-4 rounded-xl transition-colors cursor-pointer"
+            disabled={loading}
+            className="mt-2 w-full bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white font-semibold py-3 px-4 rounded-xl transition-colors cursor-pointer"
           >
-            Create account
+            {loading ? "Creating..." : "Create account"}
           </button>
         </form>
 

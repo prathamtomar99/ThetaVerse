@@ -2,6 +2,7 @@ package com.interview.backend.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.LocalDate;
 
 @Entity
@@ -15,15 +16,19 @@ public class TargetProfile {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String role;
-    private String company;
+    private String roleName;
+    private String companyName;
     private LocalDate targetDate;
-    private Double dailyHours;
+    private Double dailyHourLimit;
+    private Double maxDailyThreshold;
 
+    @ToString.Exclude
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "resume_id")
     private Resume resume;
 
+    @JsonIgnore
+    @ToString.Exclude
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;

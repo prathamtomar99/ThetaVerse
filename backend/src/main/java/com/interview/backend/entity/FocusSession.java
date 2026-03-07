@@ -2,6 +2,7 @@ package com.interview.backend.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "focus_sessions")
@@ -14,6 +15,7 @@ public class FocusSession {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @JsonIgnore
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "interview_session_id")
     private InterviewSession interviewSession;

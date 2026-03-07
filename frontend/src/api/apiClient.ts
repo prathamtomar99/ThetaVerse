@@ -1,0 +1,51 @@
+import axios from 'axios';
+
+// Create an Axios instance with base configuration
+const apiClient = axios.create({
+    baseURL: 'http://localhost:8080/api', // Adjust if your backend port is different
+    headers: {
+        'Content-Type': 'application/json',
+    },
+});
+
+apiClient.interceptors.request.use((config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+}, (error) => {
+    return Promise.reject(error);
+});
+
+export const api = {
+    // Auth
+    login: (credentials: any) => apiClient.post('/auth/login', credentials),
+    register: (credentials: any) => apiClient.post('/auth/register', credentials),
+
+    // Profiles
+    createUser: (userData: any) => apiClient.post('/profiles/user', userData),
+    createTargetProfile: (profileData: any) => apiClient.post('/profiles/target', profileData),
+
+    // Roadmaps
+    generateRoadmap: (targetProfileId: number) => apiClient.post(`/roadmaps/generate/${targetProfileId}`),
+    scheduleTasks: (roadmapId: number) => apiClient.post(`/roadmaps/${roadmapId}/schedule`),
+
+    // Interviews
+    startInterview: (profileId: number, mood: string) =>
+        apiClient.post(`/interviews/start?profileId=${profileId}&mood=${mood}`),
+    askNextQuestion: (sessionId: number, topic: string) =>
+        apiClient.post(`/interviews/${sessionId}/question?topic=${topic}`),
+    evaluateAnswer: (questionId: number, userAnswer: string) =>
+        apiClient.post(`/interviews/question/${questionId}/evaluate`, userAnswer, {
+            headers: { 'Content-Type': 'text/plain' } // If sending raw string
+        }),
+
+    // Focus
+    startFocusTracking: (sessionId: number) => apiClient.post(`/focus/start/${sessionId}`),
+    recordDistraction: (focusSessionId: number, type: string) =>
+        apiClient.post(`/focus/${focusSessionId}/alert?type=${type}`),
+    getFinalFocusScore: (focusSessionId: number) => apiClient.get(`/focus/${focusSessionId}/score`),
+};
+
+export default apiClient;

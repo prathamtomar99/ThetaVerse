@@ -16,11 +16,8 @@ public class InterviewController {
     private final InterviewSimulationService interviewService;
 
     @PostMapping("/start")
-    public ResponseEntity<InterviewSession> startSession(
-            @RequestParam Long profileId,
-            @RequestParam String mood) {
-        
-        InterviewSession session = interviewService.startSession(profileId, mood);
+    public ResponseEntity<InterviewSession> startSession(@RequestBody StartInterviewRequest request) {
+        InterviewSession session = interviewService.startSession(request);
         return ResponseEntity.ok(session);
     }
 

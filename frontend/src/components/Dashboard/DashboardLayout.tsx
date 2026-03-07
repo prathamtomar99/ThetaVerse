@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { LayoutDashboard, LogOut } from "lucide-react";
+import { LayoutDashboard, LogOut, Map } from "lucide-react";
 import { useStoreContext } from "../../contextApi/ContextApi";
 import toast from "react-hot-toast";
 
@@ -20,6 +20,10 @@ export default function DashboardLayout() {
             <LayoutDashboard className="w-5 h-5"/>
             Overview
          </Link>
+         <Link to="/roadmap/user" className="px-3 py-2 text-neutral-400 hover:text-white hover:bg-neutral-900/50 rounded-xl flex items-center gap-3 font-medium transition cursor-pointer">
+            <Map className="w-5 h-5"/>
+            My Flows
+         </Link>
          
          <button onClick={handleLogout} className="px-3 py-2 text-neutral-400 hover:text-white hover:bg-neutral-900/50 rounded-xl flex items-center gap-3 font-medium transition cursor-pointer text-left mt-auto md:mt-8">
             <LogOut className="w-5 h-5"/>
@@ -34,12 +38,12 @@ export default function DashboardLayout() {
          
          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-neutral-900/50 border border-neutral-800 p-6 rounded-2xl">
-               <div className="text-neutral-400 text-sm font-medium mb-1">Total Interviews</div>
-               <div className="text-4xl font-bold text-white">12</div>
+               <div className="text-neutral-400 text-sm font-medium mb-1">Roadmap Flows Generated</div>
+               <div className="text-4xl font-bold text-white">-</div>
             </div>
             <div className="bg-neutral-900/50 border border-neutral-800 p-6 rounded-2xl">
-               <div className="text-neutral-400 text-sm font-medium mb-1">Average Score</div>
-               <div className="text-4xl font-bold text-emerald-400">84%</div>
+               <div className="text-neutral-400 text-sm font-medium mb-1">Mock Interviews Completed</div>
+               <div className="text-4xl font-bold text-emerald-400">-</div>
             </div>
          </div>
          
@@ -49,9 +53,14 @@ export default function DashboardLayout() {
             </div>
             <h3 className="text-xl font-semibold text-white mb-2">Ready for your next session?</h3>
             <p className="text-neutral-400 max-w-sm mb-6">Start a new mock interview session tailored to your specific goals.</p>
-            <Link to="/" className="bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-3 px-6 rounded-xl transition-colors">
-               Start Interview
-            </Link>
+            <div className="flex gap-4">
+               <Link to="/interview/setup" className="bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-3 px-6 rounded-xl transition-colors">
+                  Start Interview
+               </Link>
+               <Link to="/roadmap/setup" className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-semibold py-3 px-6 rounded-xl transition-colors border border-emerald-500/20">
+                  Generate Flow
+               </Link>
+            </div>
          </div>
       </main>
     </div>

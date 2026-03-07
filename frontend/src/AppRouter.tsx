@@ -10,6 +10,11 @@ import LoginPage from "./components/LoginPage";
 import DashboardLayout from "./components/Dashboard/DashboardLayout";
 import PrivateRoute from "./PrivateRoute";
 import ErrorPage from "./components/ErrorPage";
+import InterviewSetup from "./components/Dashboard/InterviewSetup";
+import InterviewUI from "./components/Dashboard/InterviewUI";
+import RoadmapSetup from "./components/Dashboard/RoadmapSetup";
+import RoadmapUI from "./components/Dashboard/RoadmapUI";
+import UserRoadmaps from "./components/Dashboard/UserRoadmaps";
 
 const AppRouter = () => {
   const location = useLocation();
@@ -29,8 +34,22 @@ const AppRouter = () => {
         }}
       />
       <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/about" element={<AboutPage />} />
+        <Route 
+          path="/" 
+          element={
+            <PrivateRoute publicPage={false}>
+              <LandingPage />
+            </PrivateRoute>
+          } 
+        />
+        <Route 
+          path="/about" 
+          element={
+            <PrivateRoute publicPage={false}>
+              <AboutPage />
+            </PrivateRoute>
+          } 
+        />
         <Route path="/s/:url" element={<ShortenUrlPage />} />
 
         <Route
@@ -55,6 +74,46 @@ const AppRouter = () => {
           element={
             <PrivateRoute publicPage={false}>
               <DashboardLayout />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/interview/setup"
+          element={
+            <PrivateRoute publicPage={false}>
+              <InterviewSetup />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/interview/:sessionId"
+          element={
+            <PrivateRoute publicPage={false}>
+              <InterviewUI />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/roadmap/setup"
+          element={
+            <PrivateRoute publicPage={false}>
+              <RoadmapSetup />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/roadmap/user"
+          element={
+            <PrivateRoute publicPage={false}>
+              <UserRoadmaps />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/roadmap/:roadmapId"
+          element={
+            <PrivateRoute publicPage={false}>
+              <RoadmapUI />
             </PrivateRoute>
           }
         />
