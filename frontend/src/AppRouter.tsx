@@ -1,4 +1,5 @@
 import { Route, Routes, useLocation } from "react-router-dom";
+import { useEffect } from "react";
 import Navbar from "./components/NavBar";
 import ShortenUrlPage from "./components/ShortenUrlPage";
 import { Toaster } from "react-hot-toast";
@@ -12,43 +13,50 @@ import PrivateRoute from "./PrivateRoute";
 import ErrorPage from "./components/ErrorPage";
 import InterviewSetup from "./components/Dashboard/InterviewSetup";
 import InterviewUI from "./components/Dashboard/InterviewUI";
+import InterviewLogDashboard from "./components/Dashboard/InterviewLogDashboard";
+import InterviewHistory from "./components/Dashboard/InterviewHistory";
 import RoadmapSetup from "./components/Dashboard/RoadmapSetup";
 import RoadmapUI from "./components/Dashboard/RoadmapUI";
 import UserRoadmaps from "./components/Dashboard/UserRoadmaps";
+import { logExecution } from "./utils/executionLogger";
 
 const AppRouter = () => {
   const location = useLocation();
   const hideHeaderFooter = location.pathname.startsWith("/s");
 
+  useEffect(() => {
+    logExecution("AppRouter", "route changed", { path: location.pathname });
+  }, [location.pathname]);
+
   return (
     <>
       {!hideHeaderFooter && <Navbar />}
-      <Toaster 
+      <Toaster
         position="bottom-center"
         toastOptions={{
-           style: {
-              background: '#171717',
-              color: '#fff',
-              border: '1px solid #262626',
-           }
+          style: {
+            background: "#171717",
+            color: "#fff",
+            border: "1px solid #262626",
+          },
         }}
       />
       <Routes>
-        <Route 
-          path="/" 
+        <Route
+          path="/"
           element={
             <PrivateRoute publicPage={false}>
               <LandingPage />
             </PrivateRoute>
-          } 
+          }
         />
-        <Route 
-          path="/about" 
+        <Route
+          path="/about"
           element={
             <PrivateRoute publicPage={false}>
               <AboutPage />
             </PrivateRoute>
-          } 
+          }
         />
         <Route path="/s/:url" element={<ShortenUrlPage />} />
 
@@ -90,6 +98,22 @@ const AppRouter = () => {
           element={
             <PrivateRoute publicPage={false}>
               <InterviewUI />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/interview/logs/:sessionId"
+          element={
+            <PrivateRoute publicPage={false}>
+              <InterviewLogDashboard />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/interview/history"
+          element={
+            <PrivateRoute publicPage={false}>
+              <InterviewHistory />
             </PrivateRoute>
           }
         />

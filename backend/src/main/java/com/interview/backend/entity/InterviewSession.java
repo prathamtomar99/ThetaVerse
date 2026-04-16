@@ -30,6 +30,9 @@ public class InterviewSession {
     @JoinColumn(name = "interviewer_persona_id")
     private InterviewerPersona interviewerPersona;
 
+    @Column(columnDefinition = "TEXT")
+    private String roundTypes; // Added to store round types
+
     @OneToMany(mappedBy = "session", cascade = CascadeType.ALL)
     private java.util.List<InterviewLog> logs;
 

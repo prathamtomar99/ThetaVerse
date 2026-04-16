@@ -5,7 +5,12 @@ import com.interview.backend.entity.SessionQuestion;
 import com.interview.backend.service.InterviewSimulationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import com.interview.backend.dto.EvaluateAnswerRequest;
+import com.interview.backend.dto.InterviewLogResponse;
+import com.interview.backend.dto.InterviewSessionResponse;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/interviews")
@@ -21,11 +26,21 @@ public class InterviewController {
         return ResponseEntity.ok(session);
     }
 
+    @GetMapping("/{sessionId}")
+    public ResponseEntity<InterviewSessionResponse> getSession(@PathVariable Long sessionId) {
+        return ResponseEntity.ok(interviewService.getSession(sessionId));
+    }
+
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<List<InterviewSessionResponse>> getUserSessions(@PathVariable Long userId) {
+        return ResponseEntity.ok(interviewService.getUserSessions(userId));
+    }
+
     @PostMapping("/{sessionId}/question")
     public ResponseEntity<SessionQuestion> askNextQuestion(
             @PathVariable Long sessionId,
             @RequestParam String topic) {
-        
+
         SessionQuestion question = interviewService.askNextQuestion(sessionId, topic);
         return ResponseEntity.ok(question);
     }
@@ -33,9 +48,19 @@ public class InterviewController {
     @PostMapping("/question/{questionId}/evaluate")
     public ResponseEntity<SessionQuestion> evaluateAnswer(
             @PathVariable Long questionId,
-            @RequestBody String userAnswer) {
-        
-        SessionQuestion evaluatedQuestion = interviewService.evaluateAnswer(questionId, userAnswer);
+            @RequestBody EvaluateAnswerRequest request) {
+
+        SessionQuestion evaluatedQuestion = interviewService.evaluateAnswer(questionId, request);
         return ResponseEntity.ok(evaluatedQuestion);
+    }
+
+    @PostMapping("/{sessionId}/end")
+    public ResponseEntity<InterviewSessionResponse> endSession(@PathVariable Long sessionId) {
+        return ResponseEntity.ok(interviewService.endSession(sessionId));
+    }
+
+    @GetMapping("/{sessionId}/logs")
+    public ResponseEntity<List<InterviewLogResponse>> getLogs(@PathVariable Long sessionId) {
+        return ResponseEntity.ok(interviewService.getInterviewLogs(sessionId));
     }
 }

@@ -1,18 +1,27 @@
 package com.interview.backend.service;
 
+import com.interview.backend.controller.StartInterviewRequest;
+import com.interview.backend.dto.EvaluateAnswerRequest;
+import com.interview.backend.dto.InterviewLogResponse;
+import com.interview.backend.dto.InterviewSessionResponse;
 import com.interview.backend.entity.*;
 import com.interview.backend.repository.*;
-import com.interview.backend.controller.StartInterviewRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class InterviewSimulationService {
+
+        private static final int QUESTIONS_PER_TOPIC = 5;
 
         private final InterviewSessionRepository sessionRepository;
         private final SessionQuestionRepository questionRepository;
@@ -46,6 +55,7 @@ public class InterviewSimulationService {
                                 .user(profile.getUser())
                                 .targetProfile(profile)
                                 .interviewerPersona(persona)
+                                .roundTypes(request.getRoundTypes())
                                 .startTime(LocalDateTime.now())
                                 .resumeText(request.getResumeText())
                                 .build();
@@ -53,38 +63,83 @@ public class InterviewSimulationService {
                 return sessionRepository.save(session);
         }
 
+        @Transactional(readOnly = true)
+        public InterviewSessionResponse getSession(Long sessionId) {
+                InterviewSession session = sessionRepository.findById(sessionId)
+                                .orElseThrow(() -> new RuntimeException("Session not found"));
+
+                return InterviewSessionResponse.builder()
+                                .id(session.getId())
+                                .companyName(session.getTargetProfile().getCompanyName())
+                                .position(session.getTargetProfile().getRoleName())
+                                .roundTypes(session.getRoundTypes())
+                                .mood(session.getInterviewerPersona().getBaseMood())
+                                .startTime(session.getStartTime())
+                                .endTime(session.getEndTime())
+                                .resumeText(session.getResumeText())
+                                .build();
+        }
+
+        @Transactional(readOnly = true)
+        public List<InterviewSessionResponse> getUserSessions(Long userId) {
+                return sessionRepository.findByUserIdOrderByStartTimeDesc(userId)
+                                .stream()
+                                .map(session -> InterviewSessionResponse.builder()
+                                                .id(session.getId())
+                                                .companyName(session.getTargetProfile().getCompanyName())
+                                                .position(session.getTargetProfile().getRoleName())
+                                                .roundTypes(session.getRoundTypes())
+                                                .mood(session.getInterviewerPersona().getBaseMood())
+                                                .startTime(session.getStartTime())
+                                                .endTime(session.getEndTime())
+                                                .resumeText(session.getResumeText())
+                                                .build())
+                                .collect(Collectors.toList());
+        }
+
         @Transactional
         public SessionQuestion askNextQuestion(Long sessionId, String topic) {
                 InterviewSession session = sessionRepository.findById(sessionId)
                                 .orElseThrow(() -> new RuntimeException("Session not found"));
 
+                String activeTopic = topic == null || topic.isBlank()
+                                ? resolveTopic(session, (int) logRepository.countBySessionId(sessionId))
+                                : topic.trim();
+
+                List<String> recentQuestions = questionRepository.findTop5BySessionIdOrderByIdDesc(sessionId)
+                                .stream()
+                                .map(SessionQuestion::getQuestionText)
+                                .collect(Collectors.toList());
+
                 String prompt = String.format(
-                                "You are an technical interviewer for a %s position at %s. " +
-                                                "Your mood is %s. " +
-                                                "The candidate provided this context/resume: '%s'. " +
-                                                "Ask a single challenging question about %s, tailoring it to their background if relevant.",
+                                "You are a %s interviewer for a %s position at %s. " +
+                                                "Mood: %s. Candidate context: '%s'. " +
+                                                "Ask exactly one unique, concise interview question about %s. " +
+                                                "Do not repeat any of these recent questions: %s. " +
+                                                "Keep the question varied, practical, and different from earlier ones.",
+                                session.getTargetProfile().getRoleName(),
                                 session.getTargetProfile().getRoleName(),
                                 session.getTargetProfile().getCompanyName(),
                                 session.getInterviewerPersona().getBaseMood(),
                                 session.getResumeText() != null ? session.getResumeText() : "None provided",
-                                topic);
+                                activeTopic,
+                                recentQuestions.isEmpty() ? "none" : String.join(" | ", recentQuestions));
 
                 String aiQuestionText = chatClient.prompt()
                                 .user(prompt)
                                 .call()
                                 .content();
 
-                // Save AI question to log
                 logRepository.save(InterviewLog.builder()
                                 .session(session)
-                                .role("ai")
+                                .role("question")
                                 .content(aiQuestionText)
                                 .timestamp(LocalDateTime.now())
                                 .build());
 
                 SessionQuestion question = SessionQuestion.builder()
                                 .session(session)
-                                .topic(topic)
+                                .topic(activeTopic)
                                 .questionText(aiQuestionText)
                                 .build();
 
@@ -92,42 +147,115 @@ public class InterviewSimulationService {
         }
 
         @Transactional
-        public SessionQuestion evaluateAnswer(Long questionId, String userAnswer) {
+        public SessionQuestion evaluateAnswer(Long questionId, EvaluateAnswerRequest request) {
                 SessionQuestion question = questionRepository.findById(questionId)
                                 .orElseThrow(() -> new RuntimeException("Question not found"));
 
-                question.setUserAnswer(userAnswer);
+                question.setUserAnswer(request.getUserAnswer());
 
-                // Save User answer to log
                 logRepository.save(InterviewLog.builder()
                                 .session(question.getSession())
-                                .role("user")
-                                .content(userAnswer)
+                                .role("response")
+                                .content(request.getUserAnswer())
                                 .timestamp(LocalDateTime.now())
                                 .build());
 
                 String prompt = String.format(
-                                "The candidate was asked: '%s'. " +
-                                                "They answered: '%s'. " +
-                                                "Provide a brief evaluation of their technical depth, structure, and communication. "
+                                "The candidate was asked: '%s'. They answered: '%s'. " +
+                                                "Current posture feedback: '%s'. " +
+                                                "Provide a brief evaluation of technical depth, structure, posture, and communication. "
                                                 +
-                                                "Also ask a shorter follow-up question based on their answer.",
-                                question.getQuestionText(), userAnswer);
+                                                "Return actionable feedback only.",
+                                question.getQuestionText(),
+                                request.getUserAnswer(),
+                                request.getPostureFeedback() != null ? request.getPostureFeedback() : "Not available");
 
                 String aiEvaluation = chatClient.prompt()
                                 .user(prompt)
                                 .call()
                                 .content();
 
-                // Save AI evaluation to log
                 logRepository.save(InterviewLog.builder()
                                 .session(question.getSession())
-                                .role("ai")
+                                .role("evaluation")
                                 .content(aiEvaluation)
                                 .timestamp(LocalDateTime.now())
                                 .build());
 
                 question.setAiResponse(aiEvaluation);
                 return questionRepository.save(question);
+        }
+
+        @Transactional(readOnly = true)
+        public List<InterviewLogResponse> getInterviewLogs(Long sessionId) {
+                return logRepository.findBySessionIdOrderByTimestampAsc(sessionId)
+                                .stream()
+                                .map(log -> InterviewLogResponse.builder()
+                                                .id(log.getId())
+                                                .role(log.getRole())
+                                                .content(log.getContent())
+                                                .timestamp(log.getTimestamp())
+                                                .build())
+                                .collect(Collectors.toList());
+        }
+
+        @Transactional
+        public InterviewSessionResponse endSession(Long sessionId) {
+                InterviewSession session = sessionRepository.findById(sessionId)
+                                .orElseThrow(() -> new RuntimeException("Session not found"));
+
+                if (session.getEndTime() != null) {
+                        return getSession(sessionId);
+                }
+
+                List<InterviewLog> logs = logRepository.findBySessionIdOrderByTimestampAsc(sessionId);
+                String transcript = logs.stream()
+                                .map(log -> String.format("%s: %s", capitalize(log.getRole()), log.getContent()))
+                                .collect(Collectors.joining("\n"));
+
+                String finalPrompt = String.format(
+                                "Review this interview transcript and provide a final evaluation with strengths, gaps, posture notes, and next steps. Transcript:\n%s",
+                                transcript);
+
+                String finalEvaluation = chatClient.prompt()
+                                .user(finalPrompt)
+                                .call()
+                                .content();
+
+                logRepository.save(InterviewLog.builder()
+                                .session(session)
+                                .role("final")
+                                .content(finalEvaluation)
+                                .timestamp(LocalDateTime.now())
+                                .build());
+
+                session.setEndTime(LocalDateTime.now());
+                sessionRepository.save(session);
+
+                return getSession(sessionId);
+        }
+
+        private String resolveTopic(InterviewSession session, int questionCount) {
+                List<String> topics = Arrays.stream(
+                                (session.getRoundTypes() == null || session.getRoundTypes().isBlank())
+                                                ? new String[] { "Technical", "Behavioral", "System Design" }
+                                                : session.getRoundTypes().split(","))
+                                .map(String::trim)
+                                .filter(topic -> !topic.isBlank())
+                                .collect(Collectors.toList());
+
+                if (topics.isEmpty()) {
+                        topics = List.of("Technical", "Behavioral", "System Design");
+                }
+
+                int topicIndex = Math.max(questionCount, 0) / QUESTIONS_PER_TOPIC;
+                return topics.get(topicIndex % topics.size());
+        }
+
+        private String capitalize(String value) {
+                if (value == null || value.isBlank()) {
+                        return "Log";
+                }
+                return value.substring(0, 1).toUpperCase(Locale.ROOT) + value.substring(1);
         }
 }

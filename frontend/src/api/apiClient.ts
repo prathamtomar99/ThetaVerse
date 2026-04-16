@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { logExecution } from '../utils/executionLogger';
 
 // Create an Axios instance with base configuration
 const apiClient = axios.create({
@@ -9,12 +10,33 @@ const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use((config) => {
+    const startedAt = performance.now();
+    (config as any).metadata = { startedAt };
+    logExecution('API', `request ${String(config.method || 'get').toUpperCase()} ${config.url}`);
+
     const token = localStorage.getItem('token');
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
 }, (error) => {
+    return Promise.reject(error);
+});
+
+apiClient.interceptors.response.use((response) => {
+    const startedAt = (response.config as any).metadata?.startedAt;
+    const durationMs = typeof startedAt === 'number' ? Math.round(performance.now() - startedAt) : undefined;
+    logExecution('API', `response ${response.status} ${response.config.method?.toUpperCase()} ${response.config.url}`, {
+        durationMs,
+    });
+    return response;
+}, (error) => {
+    const config = error.config ?? {};
+    const startedAt = (config as any).metadata?.startedAt;
+    const durationMs = typeof startedAt === 'number' ? Math.round(performance.now() - startedAt) : undefined;
+    logExecution('API', `error ${String(config.method || 'get').toUpperCase()} ${config.url}`, {
+        durationMs,
+    });
     return Promise.reject(error);
 });
 

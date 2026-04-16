@@ -1,15 +1,16 @@
 import { Link, useNavigate } from "react-router-dom";
 import { BrainCircuit, User, LogOut } from "lucide-react";
 import { useStoreContext } from "../contextApi/ContextApi";
+import { withExecutionLog } from "../utils/executionLogger";
 
 export default function Navbar() {
   const { token, setToken } = useStoreContext();
   const navigate = useNavigate();
 
-  const handleSignOut = () => {
+  const handleSignOut = withExecutionLog("Navbar.handleSignOut", () => {
     setToken(null);
     navigate("/login");
-  };
+  });
 
   return (
     <nav className="border-b border-neutral-800 bg-neutral-900/50 backdrop-blur-xl sticky top-0 z-50">
@@ -28,7 +29,10 @@ export default function Navbar() {
           <Link to="/dashboard" className="hover:text-white transition-colors">
             Dashboard
           </Link>
-          <Link to="/roadmap/user" className="hover:text-white transition-colors">
+          <Link
+            to="/roadmap/user"
+            className="hover:text-white transition-colors"
+          >
             Roadmap
           </Link>
           <Link

@@ -1,6 +1,12 @@
 import { Link } from "react-router-dom";
+import { useEffect } from "react";
+import { logExecution } from "../utils/executionLogger";
 
 export default function Footer() {
+  useEffect(() => {
+    logExecution("Footer", "rendered");
+  }, []);
+
   return (
     <footer className="border-t border-neutral-800 bg-neutral-900/50 py-8 mt-auto">
       <div className="max-w-7xl mx-auto px-6 flex flex-col items-center justify-center text-neutral-500 text-sm">

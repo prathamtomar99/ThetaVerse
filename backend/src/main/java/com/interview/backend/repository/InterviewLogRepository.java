@@ -9,4 +9,8 @@ import java.util.List;
 @Repository
 public interface InterviewLogRepository extends JpaRepository<InterviewLog, Long> {
     List<InterviewLog> findBySessionIdOrderByTimestampAsc(Long sessionId);
+
+    List<InterviewLog> findTop5BySessionIdOrderByIdDesc(Long sessionId); // Added to fetch latest logs
+
+    long countBySessionId(Long sessionId); // Added to count logs by session
 }

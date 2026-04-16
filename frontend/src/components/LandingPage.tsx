@@ -1,6 +1,12 @@
 import { Activity, Target, Bot, LineChart } from "lucide-react";
+import { useEffect } from "react";
+import { logExecution } from "../utils/executionLogger";
 
 export default function LandingPage() {
+  useEffect(() => {
+    logExecution("LandingPage", "rendered");
+  }, []);
+
   return (
     <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-12 flex flex-col gap-12">
       {/* Header Section */}
@@ -12,8 +18,8 @@ export default function LandingPage() {
           </span>
         </h1>
         <p className="text-neutral-400 text-lg max-w-2xl">
-          Real-time evaluation of your technical depth, communication skills, and
-          focus levels using advanced AI.
+          Real-time evaluation of your technical depth, communication skills,
+          and focus levels using advanced AI.
         </p>
       </div>
 
@@ -29,8 +35,8 @@ export default function LandingPage() {
               Session Locked Focus
             </h3>
             <p className="text-neutral-500 text-sm mt-1 leading-relaxed">
-              Active distraction detection via MediaPipe tracking posture and gaze
-              during your interview.
+              Active distraction detection via MediaPipe tracking posture and
+              gaze during your interview.
             </p>
           </div>
         </div>
