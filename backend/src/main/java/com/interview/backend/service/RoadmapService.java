@@ -1,19 +1,28 @@
 package com.interview.backend.service;
 
-import com.interview.backend.entity.*;
-import com.interview.backend.repository.*;
-import lombok.RequiredArgsConstructor;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
 import com.interview.backend.controller.GenerateRoadmapRequest;
 import com.interview.backend.dto.RoadmapGenerationResponse;
-import org.springframework.ai.converter.BeanOutputConverter;
+import com.interview.backend.entity.Roadmap;
+import com.interview.backend.entity.RoadmapTopic;
+import com.interview.backend.entity.Subtopic;
+import com.interview.backend.entity.TargetProfile;
+import com.interview.backend.entity.User;
+import com.interview.backend.repository.RoadmapRepository;
+import com.interview.backend.repository.RoadmapTopicRepository;
+import com.interview.backend.repository.TargetProfileRepository;
+import com.interview.backend.repository.UserRepository;
+
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -119,8 +128,8 @@ public class RoadmapService {
                                         System.out.println("[RoadmapService] Parsing " + t.getSubtopics().size()
                                                         + " subtopics for: " + t.getTitle());
                                         List<Subtopic> subObjList = new ArrayList<>();
-                                        for(String s : t.getSubtopics()) {
-                                            subObjList.add(new Subtopic(s, false));
+                                        for(int j = 0; j < t.getSubtopics().size(); j++) {
+                                            subObjList.add(new Subtopic(t.getSubtopics().get(j), false, j + 1));
                                         }
                                         builder.subtopics(subObjList);
                                 } else {

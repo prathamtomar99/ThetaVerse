@@ -12,4 +12,5 @@ import lombok.NoArgsConstructor;
 public class Subtopic {
     private String title;
     private Boolean isCompleted = false;
+    private Integer sequenceOrder = 0; // Order within the topic's subtopics
 }
