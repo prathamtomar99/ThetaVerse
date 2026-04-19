@@ -12,6 +12,7 @@ export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState("USER");
   const [loading, setLoading] = useState(false);
 
   const handleRegister = withExecutionLog(
@@ -20,7 +21,7 @@ export default function RegisterPage() {
       e.preventDefault();
       setLoading(true);
       try {
-        const response = await api.register({ name, email, password });
+        const response = await api.register({ name, email, password, role });
         setToken(response.data.token);
         toast.success("Account created successfully!");
         navigate("/dashboard");
@@ -81,6 +82,20 @@ export default function RegisterPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-neutral-300">
+              Account Type
+            </label>
+            <select
+              className="bg-neutral-950/50 border border-neutral-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-sans"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+            >
+              <option value="USER">Student</option>
+              <option value="INTERVIEWER">Interviewer</option>
+            </select>
           </div>
 
           <button

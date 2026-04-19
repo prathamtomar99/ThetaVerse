@@ -1,16 +1,18 @@
 package com.interview.backend.service;
 
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
 import com.interview.backend.dto.AuthRequest;
 import com.interview.backend.dto.AuthResponse;
 import com.interview.backend.dto.RegisterRequest;
 import com.interview.backend.entity.Role;
 import com.interview.backend.entity.User;
 import com.interview.backend.repository.UserRepository;
+
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
@@ -22,11 +24,24 @@ public class AuthService {
         private final AuthenticationManager authenticationManager;
 
         public AuthResponse register(RegisterRequest request) {
+                Role requestedRole;
+                try {
+                        requestedRole = request.getRole() == null || request.getRole().isBlank()
+                                        ? Role.USER
+                                        : Role.valueOf(request.getRole().trim().toUpperCase());
+                } catch (IllegalArgumentException ex) {
+                        throw new RuntimeException("Invalid role requested");
+                }
+
+                if (requestedRole == Role.ADMIN) {
+                        throw new RuntimeException("Admin registration is not allowed");
+                }
+
                 var user = User.builder()
                                 .name(request.getName())
                                 .email(request.getEmail())
                                 .password(passwordEncoder.encode(request.getPassword()))
-                                .role(Role.USER)
+                                .role(requestedRole)
                                 .build();
                 repository.save(user);
 

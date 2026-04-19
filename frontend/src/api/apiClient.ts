@@ -14,8 +14,10 @@ apiClient.interceptors.request.use((config) => {
     (config as any).metadata = { startedAt };
     logExecution('API', `request ${String(config.method || 'get').toUpperCase()} ${config.url}`);
 
+    const requestUrl = String(config.url || '');
+    const isPublicAuthRoute = requestUrl === '/auth/login' || requestUrl === '/auth/register';
     const token = localStorage.getItem('token');
-    if (token) {
+    if (token && !isPublicAuthRoute) {
         config.headers.Authorization = `Bearer ${token}`;
     }
     return config;

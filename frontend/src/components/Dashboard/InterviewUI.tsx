@@ -7,6 +7,7 @@ import {
   Mic,
   MicOff,
   Send,
+  UserRound,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -20,8 +21,14 @@ interface InterviewSessionInfo {
   position: string;
   roundTypes: string;
   mood: string;
+  mode?: "AI" | "HUMAN";
   startTime: string;
   endTime: string | null;
+  scheduledAt?: string | null;
+  durationMinutes?: number | null;
+  interviewerName?: string | null;
+  interviewerEmail?: string | null;
+  meetingLink?: string | null;
   resumeText: string | null;
 }
 
@@ -131,6 +138,7 @@ export default function InterviewUI() {
 
   useEffect(() => {
     activeSessionRef.current = true;
+    let poseTimer: number | null = null;
 
     const loadSession = async () => {
       if (!sessionId) {
@@ -148,6 +156,15 @@ export default function InterviewUI() {
         setSessionInfo(info);
         setTopics(parsedTopics.length > 0 ? parsedTopics : ["Technical"]);
         setCurrentTopicIndex(0);
+
+        if (info.mode !== "HUMAN") {
+          await startWebcam();
+          initSpeechRecognition();
+          poseTimer = window.setTimeout(() => {
+            void initPoseTracking();
+          }, 1200);
+        }
+
         logExecution("InterviewUI.loadSession", "session loaded", {
           sessionId,
           topics: parsedTopics.length,
@@ -285,17 +302,13 @@ export default function InterviewUI() {
       }
     };
 
-    void startWebcam();
     void loadSession();
-    void initSpeechRecognition();
-
-    const poseTimer = window.setTimeout(() => {
-      void initPoseTracking();
-    }, 1200);
 
     return () => {
       activeSessionRef.current = false;
-      window.clearTimeout(poseTimer);
+      if (poseTimer) {
+        window.clearTimeout(poseTimer);
+      }
       if (cameraRef.current) cameraRef.current.stop();
       if (poseRef.current) poseRef.current.close();
       if (videoRef.current?.srcObject) {
@@ -474,6 +487,74 @@ export default function InterviewUI() {
       navigate(`/interview/logs/${sessionId}`);
     }
   });
+
+  if (sessionInfo?.mode === "HUMAN") {
+    return (
+      <main className="mx-auto min-h-[calc(100vh-92px)] w-full max-w-4xl px-6 py-8">
+        <div className="rounded-3xl border border-neutral-800 bg-neutral-900/40 p-8 shadow-xl">
+          <div className="mb-6 flex items-center gap-3">
+            <div className="rounded-xl bg-indigo-500/10 p-3 text-indigo-400">
+              <UserRound className="h-6 w-6" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-white">Human Interview Session</h1>
+              <p className="text-sm text-neutral-400">
+                {sessionInfo.position} at {sessionInfo.companyName}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 rounded-2xl border border-neutral-800 bg-neutral-950/40 p-5 md:grid-cols-2">
+            <div>
+              <p className="text-xs uppercase tracking-wider text-neutral-500">Interviewer</p>
+              <p className="text-white font-semibold">{sessionInfo.interviewerName || "Assigned interviewer"}</p>
+              {sessionInfo.interviewerEmail && (
+                <p className="text-sm text-neutral-400">{sessionInfo.interviewerEmail}</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wider text-neutral-500">Scheduled Time</p>
+              <p className="text-white font-semibold">
+                {sessionInfo.scheduledAt ? new Date(sessionInfo.scheduledAt).toLocaleString() : "Not scheduled"}
+              </p>
+              <p className="text-sm text-neutral-400">
+                Duration: {sessionInfo.durationMinutes || 0} minutes
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5">
+            <p className="text-sm text-emerald-100">
+              This is a real interviewer session. Join your Google Meet room to start the discussion.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (sessionInfo.meetingLink) {
+                    window.open(sessionInfo.meetingLink, "_blank", "noopener,noreferrer");
+                  }
+                }}
+                disabled={!sessionInfo.meetingLink}
+                className="rounded-xl bg-emerald-500 px-4 py-2 font-semibold text-white transition hover:bg-emerald-600 disabled:opacity-50"
+              >
+                Open Google Meet
+              </button>
+              <button
+                onClick={endSession}
+                className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 font-semibold text-rose-300 transition hover:bg-rose-500/20"
+              >
+                Mark Session Complete
+              </button>
+            </div>
+            {sessionInfo.meetingLink && (
+              <p className="mt-3 break-all text-xs text-neutral-400">{sessionInfo.meetingLink}</p>
+            )}
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto h-[calc(100vh-92px)] min-h-155 w-full max-w-7xl overflow-hidden px-6 py-5">

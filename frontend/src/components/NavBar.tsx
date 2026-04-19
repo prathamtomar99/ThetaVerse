@@ -4,7 +4,8 @@ import { useStoreContext } from "../contextApi/ContextApi";
 import { withExecutionLog } from "../utils/executionLogger";
 
 export default function Navbar() {
-  const { token, setToken } = useStoreContext();
+  const { token, setToken, currentUser } = useStoreContext();
+  const isInterviewer = currentUser?.role === "INTERVIEWER";
   const navigate = useNavigate();
 
   const handleSignOut = withExecutionLog("Navbar.handleSignOut", () => {
@@ -29,12 +30,14 @@ export default function Navbar() {
           <Link to="/dashboard" className="hover:text-white transition-colors">
             Dashboard
           </Link>
-          <Link
-            to="/roadmap/user"
-            className="hover:text-white transition-colors"
-          >
-            Roadmap
-          </Link>
+          {!isInterviewer && (
+            <Link
+              to="/roadmap/user"
+              className="hover:text-white transition-colors"
+            >
+              Roadmap
+            </Link>
+          )}
           <Link
             to="/interview/setup"
             className="text-indigo-400 hover:text-indigo-300 transition-colors"

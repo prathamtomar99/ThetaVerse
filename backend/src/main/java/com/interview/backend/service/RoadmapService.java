@@ -45,8 +45,15 @@ public class RoadmapService {
                                 .orElseThrow(() -> new RuntimeException("User not found"));
                 System.out.println("[RoadmapService] Fetched User: " + user.getId());
 
-                int days = request.getTargetDays() != null ? request.getTargetDays() : 30;
-                double dailyHours = request.getDailyHourLimit() != null ? request.getDailyHourLimit() : 4.0;
+                int days = 30;
+                if (request.getTargetDays() != null) {
+                        days = request.getTargetDays();
+                }
+
+                double dailyHours = 4.0;
+                if (request.getDailyHourLimit() != null) {
+                        dailyHours = request.getDailyHourLimit();
+                }
                 double totalHours = days * dailyHours;
 
                 System.out.println("[RoadmapService] Calculating for " + days + " days at " + dailyHours + " hrs/day = "
@@ -80,16 +87,15 @@ public class RoadmapService {
                 // Calculate approx topics based on time
                 int requestedTopicCount = Math.max(5, (int) (totalHours / 10)); // Assume ~10 hours per topic on average
 
-                String prompt = String.format(
-                                "Act as an expert technical interviewer and web scraper simulator. " +
-                                                "Generate a study roadmap for a %s at %s focusing heavily on '%s'. " +
-                                                "The user has %d days to prepare, dedicating %.1f hours per day (Total %f hours). "
-                                                +
-                                                "Generate exactly %d key topics that fit perfectly into this schedule. "
-                                                +
-                                                "For each topic, provide a list of highly specific subtopics to cover. "
-                                                +
-                                                "For referenceLinks, ONLY provide clean Google Search URLs (e.g., https://www.google.com/search?q=Search+Term) to avoid dead links. \n%s",
+                String prompt = String.format("""
+                                Act as an expert technical interviewer and web scraper simulator.
+                                Generate a study roadmap for a %s at %s focusing heavily on '%s'.
+                                The user has %d days to prepare, dedicating %.1f hours per day (Total %f hours).
+                                Generate exactly %d key topics that fit perfectly into this schedule.
+                                For each topic, provide a list of highly specific subtopics to cover.
+                                For referenceLinks, ONLY provide clean Google Search URLs (e.g., https://www.google.com/search?q=Search+Term) to avoid dead links.
+                                %s
+                                """,
                                 request.getPosition(), request.getCompanyName(), request.getMajorTopic(),
                                 days, dailyHours, totalHours, requestedTopicCount, format);
 
@@ -114,12 +120,16 @@ public class RoadmapService {
 
                         for (int i = 0; i < parsedTopics.size(); i++) {
                                 RoadmapGenerationResponse.RoadmapTopicDto t = parsedTopics.get(i);
+                                double estimatedHours = 5.0;
+                                if (t.getEstimatedHours() != null) {
+                                        estimatedHours = t.getEstimatedHours();
+                                }
+
                                 RoadmapTopic.RoadmapTopicBuilder builder = RoadmapTopic.builder()
                                                 .roadmap(roadmap)
                                                 .title(t.getTitle())
                                                 .priority(i < 2 ? "High" : "Medium")
-                                                .estimatedHours(t.getEstimatedHours() != null ? t.getEstimatedHours()
-                                                                : 5.0)
+                                                .estimatedHours(estimatedHours)
                                                 .referenceLinks(t.getReferenceLinks())
                                                 .isCompleted(false)
                                                 .sequenceOrder(i + 1);
@@ -128,8 +138,8 @@ public class RoadmapService {
                                         System.out.println("[RoadmapService] Parsing " + t.getSubtopics().size()
                                                         + " subtopics for: " + t.getTitle());
                                         List<Subtopic> subObjList = new ArrayList<>();
-                                        for(int j = 0; j < t.getSubtopics().size(); j++) {
-                                            subObjList.add(new Subtopic(t.getSubtopics().get(j), false, j + 1));
+                                                                                for (int j = 0; j < t.getSubtopics().size(); j++) {
+                                                                                                subObjList.add(new Subtopic(t.getSubtopics().get(j), false, j + 1));
                                         }
                                         builder.subtopics(subObjList);
                                 } else {
