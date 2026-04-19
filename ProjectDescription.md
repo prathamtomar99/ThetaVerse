@@ -1,25 +1,38 @@
 # Project Description
-The project is a comprehensive Interview Preparation and Learning Roadmap tracking platform. It allows users to generate personalized daily learning plans targeting specific job profiles and companies. The system employs an innovative "Ghost Performance" metric—similar to racing against a ghost in video games—to help users sync their pacing against calculated benchmarks. Additionally, it offers automated mock interviews using varying AI Personas (Strict, Medium, Friendly). The application evaluates not just technical scoring, but also focus scoring via focus alerts, creating a well-rounded analytics profile for the user.
+The project is a comprehensive Interview Preparation and Learning Roadmap tracking platform. It enables learners to generate personalized daily learning plans for target roles and companies, track momentum against a "Ghost Performance" benchmark, and practice through interview simulations. The platform now supports both AI interviews and human interviewer scheduling using Google Meet links, with role-aware user experiences for learners and interviewers.
 
 ## Completed / In Progress
 
 **Backend (Completed / Advanced Progress):**
-- **Core Entities & Repositories Structure:** Implementation of all major models including `User`, `TargetProfile`, `Roadmap`, `RoadmapTopic`, `GhostPerformance`, `FocusAlert`, and various `InterviewerPersona` classes (Friendly, Medium, Strict).
-- **Service Layer:** Crucial business logic services are implemented and active, notably `AuthService`, `GhostService`, `InterviewSimulationService`, `FocusAnalyticsService`, and `RoadmapService`.
-- **API Endpoints:** Functional Spring Boot REST controllers for Ghost synchronization, Roadmaps, Transcriptions, and Focus management.
-- **Authentication:** JWT-based user security structure.
+- **Core Domain Models:** Implemented major entities including `User`, `TargetProfile`, `Roadmap`, `RoadmapTopic`, `GhostPerformance`, `InterviewSession`, `InterviewLog`, `FocusAlert`, and persona strategy classes (`Friendly`, `Medium`, `Strict`).
+- **Interviewer Expansion:** Added support for `INTERVIEWER` role, human interview mode, interviewer profile management, and interviewer availability slots.
+- **Roadmap Persistence Fix:** Resolved roadmap subtopic ordering persistence issue by aligning model fields with DB constraints (`sequenceOrder` support for subtopics).
+- **Service Layer:** Active business logic in `AuthService`, `RoadmapService`, `GhostService`, `InterviewSimulationService`, and `FocusAnalyticsService`.
+- **API Endpoints:** Functional REST controllers for auth, roadmap generation/tracking, ghost synchronization, interview flows, interviewer slot/profile management, and interview history.
+- **Authentication & Security:** JWT-based stateless auth with improved handling for malformed/stale token scenarios on public flows.
+- **Schema Compatibility Update:** Added startup schema correction for role-column length compatibility to support expanded role values.
 
-**Frontend (In Progress):**
-- **Foundation & Routing:** React application initialized with basic routing layout constraints (`AppRouter`, `PrivateRoute`).
-- **Authentication Views:** Functioning UI for `LoginPage` and `RegisterPage`.
-- **Dashboard Interfaces:** Components for setting up and rendering Roadmaps (`RoadmapSetup`, `RoadmapUI`, `UserRoadmaps`) and Mock Interviews (`InterviewSetup`, `InterviewUI`).
+**Frontend (Completed / Advanced Progress):**
+- **Foundation & Routing:** React + TypeScript app with protected routing and dashboard navigation.
+- **Authentication Views:** Working login and register pages with role selection (`USER`, `INTERVIEWER`).
+- **Roadmap UX:** Setup/list/detail roadmap components with enhanced flow visualization and themed UI refinements.
+- **Interview UX:** AI interview experience with log views plus human interview booking flow.
+- **Interviewer UX:** Interviewer-focused dashboard/actions, slot creation/management, and slot-history view.
+- **Role-Based Navigation:** Roadmap surfaces are hidden for interviewer accounts in dashboard/top-nav contexts.
+- **Advanced Ghost Analytics UI:** Richer time-series and comparative visualizations for ghost pacing remain pending.(kinda done)
 
 ## Not Implemented / Planned Features
 
-- **Comprehensive Testing:** Lack of extensive unit tests, integration tests, and end-to-end (E2E) testing for both backend APIs and frontend UI components.
-- **Advanced Ghost Performance UI:** Detailed visual graphs and real-time interactive tracking elements for the Ghost sync on the frontend are pending.
-- **Hardware Integration for Focus Alerts:** Actual complex user physical tracking (like webcam focus or attention drift integration via computer vision) remains fully integrated on the client-side as backend currently acts as a data sink.
-- **Extensive CI/CD Pipeline:** DevOps pipelines for automated linting, testing, and active platform deployment are not fully implemented.
+- **Comprehensive Testing:** Broader unit, integration, and E2E coverage is still needed across backend and frontend.
+- **Hardware Focus Tracking:** Full client-side CV-based focus tracking remains partially integrated.
+- **CI/CD Hardening:** Automated pipelines for lint, test, build, and deployment are not fully mature.
+- **Operational Observability:** Centralized metrics/tracing and structured alerting can be further improved.
+
+## Known Issues / Recent Stabilizations
+
+- **Role Schema Drift (Resolved):** Registration failures for interviewer accounts were caused by DB column sizing mismatch for role values.
+- **Auth Validation Edge Case (Resolved):** Token interceptor/public route behavior around `/auth/me` caused session validation issues until corrected.
+- **Cross-Surface Role Gating (Stabilized):** Role-specific visibility required updates in multiple UI locations (dashboard, history, top navigation).
 
 ---
 
@@ -33,7 +46,13 @@ hide empty methods
 
 enum Role {
   USER
+  INTERVIEWER
   ADMIN
+}
+
+enum InterviewMode {
+  AI
+  HUMAN
 }
 
 class User {
@@ -44,6 +63,22 @@ class User {
   - experienceLevel: String
   + getAuthorities(): Collection
   + isAccountNonExpired(): boolean
+}
+
+class InterviewerProfile {
+  - userId: Long {unique}
+  - headline: String
+  - yearsOfExperience: Integer
+  - expertiseTags: String
+  - about: String
+}
+
+class InterviewAvailabilitySlot {
+  - interviewerId: Long
+  - startTime: LocalDateTime
+  - endTime: LocalDateTime
+  - googleMeetLink: String
+  - booked: Boolean
 }
 
 class TargetProfile {
@@ -74,6 +109,7 @@ class RoadmapTopic {
 class Subtopic <<Value Object>> {
   - title: String {unique}
   - isCompleted: Boolean
+  - sequenceOrder: Integer
 }
 
 class GhostPerformance {
@@ -93,8 +129,12 @@ class MediumPersona
 class FriendlyPersona
 
 class InterviewSession {
+  - mode: InterviewMode
   - startTime: LocalDateTime
   - endTime: LocalDateTime
+  - scheduledStartTime: LocalDateTime
+  - scheduledEndTime: LocalDateTime
+  - meetingLink: String
   - techScore: Double {0 <= value <= 100}
   - focusScore: Double {0 <= value <= 100}
   + calculateOverallScore(): Double
@@ -114,19 +154,21 @@ class FocusAlert {
 
 ' Relationships
 User --> Role : has
-
 User "1" o-- "0..*" TargetProfile : manages
 User "1" --> "0..*" InterviewSession : attempts
+User "1" -- "0..1" InterviewerProfile : owns
+User "1" -- "0..*" InterviewAvailabilitySlot : publishes
+
+InterviewSession --> InterviewMode : uses
+InterviewSession "0..*" --> "0..1" User : interviewer
 
 TargetProfile "1" *-- "1" Roadmap : generates
-
 Roadmap "1" -- "1.." RoadmapTopic : contains
 Roadmap "1" *-- "1" GhostPerformance : benchmark
-
 RoadmapTopic "1" -- "0.." Subtopic : includes
 
 InterviewSession "1" --> "1" TargetProfile : tests
-InterviewSession "1" --> "1" InterviewerPersona : uses
+InterviewSession "1" --> "0..1" InterviewerPersona : uses for AI mode
 InterviewSession "1" -- "0.." InterviewLog : logs
 InterviewSession "1" -- "0.." FocusAlert : alerts
 
@@ -135,7 +177,6 @@ InterviewerPersona <|-- MediumPersona
 InterviewerPersona <|-- FriendlyPersona
 
 ' Constraints
-
 note right of InterviewerPersona
   {disjoint, complete}
 end note
@@ -144,12 +185,12 @@ note right of RoadmapTopic
   {ordered by sequenceOrder}
 end note
 
-note right of User
-  {max 5 InterviewSessions per day}
+note right of InterviewSession
+  {endTime > startTime}
 end note
 
 note right of InterviewSession
-  {endTime > startTime}
+  {mode = HUMAN implies meetingLink and schedule required}
 end note
 
 @enduml
