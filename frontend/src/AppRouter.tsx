@@ -19,6 +19,9 @@ import RoadmapSetup from "./components/Dashboard/RoadmapSetup";
 import RoadmapUI from "./components/Dashboard/RoadmapUI";
 import UserRoadmaps from "./components/Dashboard/UserRoadmaps";
 import { logExecution } from "./utils/executionLogger";
+import LiveSetup from "./components/live/LiveSetup";
+import InterviewerDashboard from "./components/live/InterviewerDashboard";
+import StudentSession from "./components/live/StudentSession";
 
 const AppRouter = () => {
   const location = useLocation();
@@ -138,6 +141,30 @@ const AppRouter = () => {
           element={
             <PrivateRoute publicPage={false}>
               <RoadmapUI />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/live/setup"
+          element={
+            <PrivateRoute publicPage={false}>
+              <LiveSetup />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/live/host/:hostId/:sessionCode"
+          element={
+            <PrivateRoute publicPage={false}>
+              <InterviewerDashboard />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/live/:sessionCode"
+          element={
+            <PrivateRoute publicPage={false}>
+              <StudentSession />
             </PrivateRoute>
           }
         />

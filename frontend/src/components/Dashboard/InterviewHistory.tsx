@@ -23,7 +23,6 @@ interface InterviewSlotSummary {
   interviewerName: string;
   startTime: string;
   endTime: string;
-  googleMeetLink: string;
   booked: boolean;
 }
 
@@ -46,10 +45,14 @@ export default function InterviewHistory() {
         if (isInterviewer) {
           const response = await apiClient.get("/interviewers/slots/me");
           setSlots(response.data);
-          logExecution("InterviewHistory.loadHistory", "interviewer slots loaded", {
-            userId: currentUserId,
-            count: response.data.length,
-          });
+          logExecution(
+            "InterviewHistory.loadHistory",
+            "interviewer slots loaded",
+            {
+              userId: currentUserId,
+              count: response.data.length,
+            },
+          );
         } else {
           const response = await apiClient.get(
             `/interviews/user/${currentUserId}`,
@@ -131,15 +134,9 @@ export default function InterviewHistory() {
                   <Clock className="w-3.5 h-3.5" />
                   {slot.booked ? "Already booked" : "Open for booking"}
                 </div>
-
-                <a
-                  href={slot.googleMeetLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full rounded-xl border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm font-semibold text-neutral-200 hover:bg-neutral-700 transition text-center"
-                >
-                  Open Meet Link
-                </a>
+                <div className="block w-full rounded-xl border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm font-semibold text-neutral-200 text-center">
+                  Controlled live session slot
+                </div>
               </div>
             ))}
           </div>

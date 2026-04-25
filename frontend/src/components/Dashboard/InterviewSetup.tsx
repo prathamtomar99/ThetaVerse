@@ -1,28 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../../api/apiClient";
 import { Bot, CalendarPlus, Play, UserRound } from "lucide-react";
 import toast from "react-hot-toast";
 import { useStoreContext } from "../../contextApi/ContextApi";
 import { withExecutionLog } from "../../utils/executionLogger";
-
-interface InterviewerProfile {
-  interviewerId: number;
-  name: string;
-  email: string;
-  headline?: string;
-  bio?: string;
-}
-
-interface InterviewSlot {
-  slotId: number;
-  interviewerId: number;
-  interviewerName: string;
-  startTime: string;
-  endTime: string;
-  googleMeetLink: string;
-  booked: boolean;
-}
 
 export default function InterviewSetup() {
   const [companyName, setCompanyName] = useState("Barclays");
@@ -31,18 +13,14 @@ export default function InterviewSetup() {
   const [mood, setMood] = useState("Medium");
   const [resumeText, setResumeText] = useState("");
   const [mode, setMode] = useState("AI");
-
-  const [interviewers, setInterviewers] = useState<InterviewerProfile[]>([]);
-  const [slots, setSlots] = useState<InterviewSlot[]>([]);
-  const [selectedInterviewerId, setSelectedInterviewerId] = useState<number | null>(null);
-  const [selectedSlotId, setSelectedSlotId] = useState<number | null>(null);
+  const [sessionCode, setSessionCode] = useState("");
+  const [createdLiveSession, setCreatedLiveSession] = useState<{
+    code: string;
+    hostId: string;
+  } | null>(null);
 
   const [myHeadline, setMyHeadline] = useState("");
   const [myBio, setMyBio] = useState("");
-  const [slotStart, setSlotStart] = useState("");
-  const [slotEnd, setSlotEnd] = useState("");
-  const [slotMeetLink, setSlotMeetLink] = useState("");
-  const [mySlots, setMySlots] = useState<InterviewSlot[]>([]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isProfileSaving, setIsProfileSaving] = useState(false);
@@ -53,60 +31,20 @@ export default function InterviewSetup() {
 
   const isInterviewer = currentUser?.role === "INTERVIEWER";
 
-  const selectedInterviewer = useMemo(() => {
-    return interviewers.find((item) => item.interviewerId === selectedInterviewerId) || null;
-  }, [interviewers, selectedInterviewerId]);
-
-  const loadInterviewerDirectory = async () => {
-    const response = await apiClient.get("/interviewers");
-    setInterviewers(response.data);
-  };
-
-  const loadSlotsForInterviewer = async (interviewerId: number) => {
-    const response = await apiClient.get(`/interviewers/${interviewerId}/slots?onlyAvailable=true`);
-    setSlots(response.data);
-    setSelectedSlotId(null);
-  };
-
-  const loadInterviewerSelfData = async () => {
-    const [profileRes, slotRes] = await Promise.all([
-      apiClient.get("/interviewers/profile/me"),
-      apiClient.get("/interviewers/slots/me"),
-    ]);
-
-    setMyHeadline(profileRes.data.headline || "");
-    setMyBio(profileRes.data.bio || "");
-    setMySlots(slotRes.data);
-  };
-
   useEffect(() => {
     const init = async () => {
       try {
         if (isInterviewer) {
-          await loadInterviewerSelfData();
-          return;
+          const profileRes = await apiClient.get("/interviewers/profile/me");
+          setMyHeadline(profileRes.data.headline || "");
+          setMyBio(profileRes.data.bio || "");
         }
-
-        await loadInterviewerDirectory();
       } catch (error) {
         console.error("Failed to initialize interview setup", error);
-        toast.error("Failed to load interview setup data");
       }
     };
-
     void init();
   }, [isInterviewer]);
-
-  useEffect(() => {
-    if (isInterviewer || mode !== "HUMAN" || !selectedInterviewerId) {
-      return;
-    }
-
-    void loadSlotsForInterviewer(selectedInterviewerId).catch((error) => {
-      console.error("Failed to load interviewer slots", error);
-      toast.error("Failed to load available slots");
-    });
-  }, [selectedInterviewerId, mode, isInterviewer]);
 
   const handleSaveProfile = withExecutionLog(
     "InterviewSetup.handleSaveProfile",
@@ -128,30 +66,23 @@ export default function InterviewSetup() {
     },
   );
 
-  const handleCreateSlot = withExecutionLog(
-    "InterviewSetup.handleCreateSlot",
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      setIsSlotSaving(true);
-      try {
-        await apiClient.post("/interviewers/slots", {
-          startTime: slotStart,
-          endTime: slotEnd,
-          googleMeetLink: slotMeetLink,
-        });
-        toast.success("Slot created");
-        setSlotStart("");
-        setSlotEnd("");
-        setSlotMeetLink("");
-        await loadInterviewerSelfData();
-      } catch (error) {
-        console.error(error);
-        toast.error("Failed to create slot");
-      } finally {
-        setIsSlotSaving(false);
+  const handleStartLive = async () => {
+    setIsSlotSaving(true);
+    try {
+      const response = await apiClient.post("/live-sessions/create", {
+        hostName: currentUser?.name || "Interviewer",
+      });
+      const data = response.data;
+      if (data.sessionCode && data.hostId) {
+        setCreatedLiveSession({ code: data.sessionCode, hostId: data.hostId });
       }
-    },
-  );
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to create live session");
+    } finally {
+      setIsSlotSaving(false);
+    }
+  };
 
   const handleStart = withExecutionLog(
     "InterviewSetup.handleStart",
@@ -165,23 +96,11 @@ export default function InterviewSetup() {
         }
 
         if (mode === "HUMAN") {
-          if (!selectedInterviewerId || !selectedSlotId) {
-            toast.error("Please select interviewer and slot");
+          if (!sessionCode) {
+            toast.error("Please enter a valid session code");
             return;
           }
-
-          const res = await apiClient.post("/interviews/book-human", {
-            userId: currentUserId,
-            interviewerId: selectedInterviewerId,
-            slotId: selectedSlotId,
-            companyName,
-            position,
-            roundTypes,
-            resumeText,
-          });
-
-          toast.success("Interview booked successfully");
-          navigate(`/interview/${res.data.id}`);
+          navigate(`/live/${sessionCode}`);
           return;
         }
 
@@ -213,12 +132,16 @@ export default function InterviewSetup() {
           <div className="bg-neutral-900/40 border border-neutral-800 rounded-3xl p-8 shadow-xl">
             <div className="flex items-center gap-3 mb-6">
               <UserRound className="w-6 h-6 text-indigo-400" />
-              <h1 className="text-2xl font-bold text-white">Interviewer Profile</h1>
+              <h1 className="text-2xl font-bold text-white">
+                Interviewer Profile
+              </h1>
             </div>
 
             <form onSubmit={handleSaveProfile} className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-neutral-300">Headline</label>
+                <label className="text-sm font-medium text-neutral-300">
+                  Headline
+                </label>
                 <input
                   type="text"
                   value={myHeadline}
@@ -228,7 +151,9 @@ export default function InterviewSetup() {
                 />
               </div>
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-neutral-300">Bio</label>
+                <label className="text-sm font-medium text-neutral-300">
+                  Bio
+                </label>
                 <textarea
                   value={myBio}
                   onChange={(e) => setMyBio(e.target.value)}
@@ -250,73 +175,52 @@ export default function InterviewSetup() {
           <div className="bg-neutral-900/40 border border-neutral-800 rounded-3xl p-8 shadow-xl">
             <div className="flex items-center gap-3 mb-6">
               <CalendarPlus className="w-6 h-6 text-emerald-400" />
-              <h2 className="text-2xl font-bold text-white">Create Slot</h2>
+              <h2 className="text-2xl font-bold text-white">Live Session</h2>
             </div>
 
-            <form onSubmit={handleCreateSlot} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-neutral-300">Start Time</label>
-                <input
-                  type="datetime-local"
-                  required
-                  value={slotStart}
-                  onChange={(e) => setSlotStart(e.target.value)}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-white"
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-neutral-300">End Time</label>
-                <input
-                  type="datetime-local"
-                  required
-                  value={slotEnd}
-                  onChange={(e) => setSlotEnd(e.target.value)}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-white"
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-neutral-300">Google Meet Link</label>
-                <input
-                  type="url"
-                  required
-                  value={slotMeetLink}
-                  onChange={(e) => setSlotMeetLink(e.target.value)}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-white"
-                  placeholder="https://meet.google.com/xxx-xxxx-xxx"
-                />
-              </div>
-              <button
-                disabled={isSlotSaving}
-                type="submit"
-                className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white font-semibold py-3 px-4 rounded-xl"
-              >
-                {isSlotSaving ? "Creating..." : "Create Availability Slot"}
-              </button>
-            </form>
-          </div>
-        </div>
-
-        <div className="mt-6 bg-neutral-900/40 border border-neutral-800 rounded-3xl p-8 shadow-xl">
-          <h3 className="text-xl font-bold text-white mb-4">My Slots</h3>
-          {mySlots.length === 0 ? (
-            <p className="text-neutral-400">No slots created yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {mySlots.map((slot) => (
-                <div key={slot.slotId} className="rounded-xl border border-neutral-800 bg-neutral-950/60 px-4 py-3 flex items-center justify-between">
-                  <div>
-                    <p className="text-white font-medium">
-                      {new Date(slot.startTime).toLocaleString()} - {new Date(slot.endTime).toLocaleTimeString()}
-                    </p>
-                    <p className="text-xs text-neutral-400">{slot.googleMeetLink}</p>
-                  </div>
-                  <span className={`text-xs font-semibold px-2 py-1 rounded ${slot.booked ? "bg-rose-500/20 text-rose-300" : "bg-emerald-500/20 text-emerald-300"}`}>
-                    {slot.booked ? "Booked" : "Available"}
-                  </span>
+            {createdLiveSession ? (
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-6">
+                <p className="text-emerald-400 font-semibold mb-2 flex items-center justify-center gap-2">
+                  Session Created Successfully!
+                </p>
+                <p className="text-neutral-300 text-sm mb-4 text-center">
+                  Share this code with students to join:
+                </p>
+                <div className="bg-neutral-950 px-4 py-3 rounded-lg font-mono text-2xl text-center text-white font-bold tracking-widest mb-6 border border-neutral-800">
+                  {createdLiveSession.code}
                 </div>
-              ))}
-            </div>
-          )}
+                <button
+                  onClick={() =>
+                    navigate(
+                      `/live/host/${createdLiveSession.hostId}/${createdLiveSession.code}`,
+                    )
+                  }
+                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 px-4 rounded-xl transition-colors"
+                >
+                  Enter Live Room
+                </button>
+                <p className="text-xs text-neutral-500 text-center mt-4">
+                  You can copy the code and start the room later within the same
+                  browser session.
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-neutral-400 mb-6">
+                  Create a real-time WebRTC session. You will be the host with
+                  full control over admissions.
+                </p>
+
+                <button
+                  disabled={isSlotSaving}
+                  onClick={handleStartLive}
+                  className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white font-semibold py-3 px-4 rounded-xl"
+                >
+                  {isSlotSaving ? "Creating..." : "Start Live Interview Room"}
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -331,117 +235,100 @@ export default function InterviewSetup() {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-white">Interview Setup</h1>
-            <p className="text-neutral-400">AI mock or human interviewer booking</p>
+            <p className="text-neutral-400">
+              AI mock or human interviewer booking
+            </p>
           </div>
         </div>
 
         <form onSubmit={handleStart} className="flex flex-col gap-6">
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-neutral-300">Interview Mode</label>
+            <label className="text-sm font-medium text-neutral-300">
+              Interview Mode
+            </label>
             <select
               value={mode}
               onChange={(e) => {
                 setMode(e.target.value);
-                setSelectedInterviewerId(null);
-                setSelectedSlotId(null);
-                setSlots([]);
               }}
               className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-white"
             >
               <option value="AI">AI Interview</option>
-              <option value="HUMAN">Human Interviewer (Google Meet)</option>
+              <option value="HUMAN">Live Human Interview (Code)</option>
             </select>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {mode === "HUMAN" && (
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-neutral-300">Target Company</label>
+              <label className="text-sm font-medium text-neutral-300">
+                Session Code
+              </label>
               <input
                 type="text"
                 required
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
+                value={sessionCode}
+                onChange={(e) => setSessionCode(e.target.value)}
+                placeholder="Enter host code (e.g. 5d8a9b1c)"
                 className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-white"
               />
             </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-neutral-300">Target Position</label>
-              <input
-                type="text"
-                required
-                value={position}
-                onChange={(e) => setPosition(e.target.value)}
-                className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-white"
-              />
-            </div>
-          </div>
+          )}
 
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-neutral-300">Round Types</label>
-            <input
-              type="text"
-              required
-              value={roundTypes}
-              onChange={(e) => setRoundTypes(e.target.value)}
-              className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-white"
-              placeholder="e.g. Technical, HLD, HR"
-            />
-          </div>
-
-          {mode === "AI" ? (
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-neutral-300">Interviewer Mood</label>
-              <select
-                value={mood}
-                onChange={(e) => setMood(e.target.value)}
-                className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-white"
-              >
-                <option value="Friendly">Friendly</option>
-                <option value="Medium">Medium</option>
-                <option value="Strict">Strict</option>
-              </select>
-            </div>
-          ) : (
+          {mode === "AI" && (
             <>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-neutral-300">Choose Interviewer</label>
-                <select
-                  required
-                  value={selectedInterviewerId ?? ""}
-                  onChange={(e) => setSelectedInterviewerId(Number(e.target.value))}
-                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-white"
-                >
-                  <option value="" disabled>
-                    Select interviewer
-                  </option>
-                  {interviewers.map((interviewer) => (
-                    <option key={interviewer.interviewerId} value={interviewer.interviewerId}>
-                      {interviewer.name} {interviewer.headline ? `- ${interviewer.headline}` : ""}
-                    </option>
-                  ))}
-                </select>
-                {selectedInterviewer?.bio && (
-                  <p className="text-xs text-neutral-400">{selectedInterviewer.bio}</p>
-                )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-neutral-300">
+                    Target Company
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-white"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-neutral-300">
+                    Target Position
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={position}
+                    onChange={(e) => setPosition(e.target.value)}
+                    className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-white"
+                  />
+                </div>
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-neutral-300">Choose Available Slot</label>
-                <select
+                <label className="text-sm font-medium text-neutral-300">
+                  Round Types
+                </label>
+                <input
+                  type="text"
                   required
-                  value={selectedSlotId ?? ""}
-                  onChange={(e) => setSelectedSlotId(Number(e.target.value))}
+                  value={roundTypes}
+                  onChange={(e) => setRoundTypes(e.target.value)}
                   className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-white"
-                  disabled={!selectedInterviewerId}
+                  placeholder="e.g. Technical, HLD, HR"
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-neutral-300">
+                  Interviewer Mood
+                </label>
+                <select
+                  value={mood}
+                  onChange={(e) => setMood(e.target.value)}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-white"
                 >
-                  <option value="" disabled>
-                    Select slot
-                  </option>
-                  {slots.map((slot) => (
-                    <option key={slot.slotId} value={slot.slotId}>
-                      {new Date(slot.startTime).toLocaleString()} - {new Date(slot.endTime).toLocaleTimeString()}
-                    </option>
-                  ))}
+                  <option value="Friendly">Friendly</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Strict">Strict</option>
                 </select>
               </div>
             </>
@@ -464,7 +351,11 @@ export default function InterviewSetup() {
             type="submit"
             className="mt-4 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white font-semibold py-4 px-6 rounded-xl flex items-center justify-center gap-2 transition-colors"
           >
-            {isLoading ? "Initializing..." : mode === "HUMAN" ? "Book Interview" : "Start Session"}
+            {isLoading
+              ? "Initializing..."
+              : mode === "HUMAN"
+                ? "Join Live Session"
+                : "Start Session"}
             {!isLoading && <Play className="w-5 h-5" />}
           </button>
         </form>

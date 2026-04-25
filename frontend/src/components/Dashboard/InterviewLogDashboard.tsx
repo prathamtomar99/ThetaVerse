@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, BookOpen, Clock, MessageSquareText } from "lucide-react";
 import toast from "react-hot-toast";
@@ -21,6 +21,224 @@ interface InterviewLogEntry {
   role: string;
   content: string;
   timestamp: string;
+}
+
+const AI_ROLES = new Set(["response", "evaluation", "final"]);
+
+function normalizeInlineText(text: string) {
+  return text
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .trim();
+}
+
+function renderInlineText(text: string) {
+  const normalized = normalizeInlineText(text);
+  const parts = normalized.split("\n");
+
+  if (parts.length <= 1) {
+    return normalized;
+  }
+
+  return (
+    <>
+      {parts.map((part, index) => (
+        <Fragment key={`inline-${index}`}>
+          {index > 0 && <br />}
+          {part}
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
+function isMarkdownTableLine(line: string) {
+  const trimmed = line.trim();
+  return /^\|.*\|$/.test(trimmed);
+}
+
+function parseMarkdownTableRow(line: string) {
+  return line
+    .trim()
+    .split("|")
+    .slice(1, -1)
+    .map((cell) => cell.trim());
+}
+
+function isMarkdownTableSeparator(cells: string[]) {
+  return (
+    cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell.trim()))
+  );
+}
+
+function renderLogContent(content: string) {
+  const lines = content.split("\n").map((line) => line.replace(/\s+$/g, ""));
+
+  const blocks: ReactNode[] = [];
+  let listBuffer: string[] = [];
+  let listType: "ul" | "ol" | null = null;
+
+  const flushList = () => {
+    if (listBuffer.length === 0 || !listType) {
+      return;
+    }
+
+    if (listType === "ul") {
+      blocks.push(
+        <ul key={`ul-${blocks.length}`} className="list-disc pl-5 space-y-1.5">
+          {listBuffer.map((item, index) => (
+            <li key={`ul-item-${index}`}>{item}</li>
+          ))}
+        </ul>,
+      );
+    } else {
+      blocks.push(
+        <ol
+          key={`ol-${blocks.length}`}
+          className="list-decimal pl-5 space-y-1.5 marker:font-semibold"
+        >
+          {listBuffer.map((item, index) => (
+            <li key={`ol-item-${index}`}>{item}</li>
+          ))}
+        </ol>,
+      );
+    }
+
+    listBuffer = [];
+    listType = null;
+  };
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (!trimmed) {
+      flushList();
+      continue;
+    }
+
+    if (
+      isMarkdownTableLine(trimmed) &&
+      i + 1 < lines.length &&
+      isMarkdownTableLine(lines[i + 1].trim())
+    ) {
+      const headerCells = parseMarkdownTableRow(trimmed);
+      const separatorCells = parseMarkdownTableRow(lines[i + 1]);
+
+      if (isMarkdownTableSeparator(separatorCells)) {
+        flushList();
+
+        const rows: string[][] = [];
+        let rowIndex = i + 2;
+        while (
+          rowIndex < lines.length &&
+          isMarkdownTableLine(lines[rowIndex].trim())
+        ) {
+          rows.push(parseMarkdownTableRow(lines[rowIndex]));
+          rowIndex += 1;
+        }
+
+        blocks.push(
+          <div
+            key={`table-${blocks.length}`}
+            className="overflow-x-auto rounded-xl border border-white/10"
+          >
+            <table className="w-full min-w-180 border-collapse text-left text-sm">
+              <thead className="bg-white/5 text-white">
+                <tr>
+                  {headerCells.map((cell, idx) => (
+                    <th
+                      key={`th-${idx}`}
+                      className="px-3 py-2 font-semibold align-top"
+                    >
+                      {renderInlineText(cell)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, ridx) => (
+                  <tr
+                    key={`tr-${ridx}`}
+                    className="border-t border-white/10 align-top"
+                  >
+                    {headerCells.map((_, cidx) => (
+                      <td
+                        key={`td-${ridx}-${cidx}`}
+                        className="px-3 py-2 text-current/95"
+                      >
+                        {renderInlineText(row[cidx] ?? "")}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>,
+        );
+
+        i = rowIndex - 1;
+        continue;
+      }
+    }
+
+    const unorderedMatch = trimmed.match(/^(?:[-*•])\s+(.+)/);
+    if (unorderedMatch) {
+      if (listType && listType !== "ul") {
+        flushList();
+      }
+      listType = "ul";
+      listBuffer.push(normalizeInlineText(unorderedMatch[1]));
+      continue;
+    }
+
+    const orderedMatch = trimmed.match(/^\d+[.)]\s+(.+)/);
+    if (orderedMatch) {
+      if (listType && listType !== "ol") {
+        flushList();
+      }
+      listType = "ol";
+      listBuffer.push(normalizeInlineText(orderedMatch[1]));
+      continue;
+    }
+
+    flushList();
+
+    const markdownHeadingMatch = trimmed.match(/^#{1,6}\s+(.+)$/);
+    if (markdownHeadingMatch) {
+      blocks.push(
+        <h4
+          key={`h-md-${blocks.length}`}
+          className="mt-1 font-semibold text-white"
+        >
+          {renderInlineText(markdownHeadingMatch[1])}
+        </h4>,
+      );
+      continue;
+    }
+
+    const headingMatch = trimmed.match(/^\*\*(.+)\*\*:??$/);
+    if (headingMatch) {
+      blocks.push(
+        <h4
+          key={`h-${blocks.length}`}
+          className="mt-1 font-semibold text-white"
+        >
+          {renderInlineText(headingMatch[1])}
+        </h4>,
+      );
+      continue;
+    }
+
+    blocks.push(
+      <p key={`p-${blocks.length}`} className="leading-7">
+        {renderInlineText(trimmed)}
+      </p>,
+    );
+  }
+
+  flushList();
+
+  return blocks.length > 0 ? blocks : <p className="leading-7">{content}</p>;
 }
 
 export default function InterviewLogDashboard() {
@@ -149,7 +367,7 @@ export default function InterviewLogDashboard() {
                     {log.role}
                   </div>
                   <div
-                    className={`rounded-2xl border px-4 py-3 text-sm leading-6 whitespace-pre-wrap ${
+                    className={`rounded-2xl border px-4 py-3 text-sm whitespace-pre-wrap wrap-break-word ${
                       log.role === "response"
                         ? "border-indigo-500/35 bg-indigo-500/12 text-indigo-100"
                         : log.role === "evaluation" || log.role === "final"
@@ -157,7 +375,13 @@ export default function InterviewLogDashboard() {
                           : "border-neutral-700 bg-neutral-900/70 text-neutral-200"
                     }`}
                   >
-                    {log.content}
+                    {AI_ROLES.has(log.role) ? (
+                      <div className="space-y-2 text-[15px] leading-7">
+                        {renderLogContent(log.content)}
+                      </div>
+                    ) : (
+                      log.content
+                    )}
                   </div>
                 </div>
               ))}
@@ -175,8 +399,10 @@ export default function InterviewLogDashboard() {
               <h2 className="text-xl font-semibold text-white mb-4">
                 Final Evaluation
               </h2>
-              <div className="text-sm leading-6 text-emerald-100 whitespace-pre-wrap">
-                {finalEvaluation}
+              <div className="text-sm text-emerald-100 whitespace-pre-wrap wrap-break-word">
+                <div className="space-y-2 text-[15px] leading-7">
+                  {renderLogContent(finalEvaluation)}
+                </div>
               </div>
             </div>
 
