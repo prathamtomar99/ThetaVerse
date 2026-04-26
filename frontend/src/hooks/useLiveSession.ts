@@ -174,8 +174,15 @@ export const useLiveSession = (
     if (tracksToAdd.length) {
       tracksToAdd.forEach((track) => pc.addTrack(track, stream as MediaStream));
     } else {
-      pc.addTransceiver('video', { direction: 'recvonly' });
-      pc.addTransceiver('audio', { direction: 'recvonly' });
+      if (isHost) {
+        // Host starts with explicit media sections so tracks can be attached later
+        // without creating unstable transceiver topologies.
+        pc.addTransceiver('video', { direction: 'sendrecv' });
+        pc.addTransceiver('audio', { direction: 'sendrecv' });
+      } else {
+        pc.addTransceiver('video', { direction: 'recvonly' });
+        pc.addTransceiver('audio', { direction: 'recvonly' });
+      }
     }
 
     pc.onicecandidate = (event) => {
@@ -423,6 +430,69 @@ export const useLiveSession = (
     }
   }, [isHost, sendToPeer]);
 
+  const syncHostOutboundTracks = useCallback(async () => {
+    if (!isHost) {
+      return;
+    }
+
+    const stream = localStreamRef.current;
+    if (!stream) {
+      return;
+    }
+
+    const permissions = hostMediaPermissionsRef.current;
+    const screenTrack = screenTrackRef.current;
+    const cameraTrack = stream.getVideoTracks().find((track) => track !== screenTrack) ?? null;
+    const activeVideoTrack = permissions.screenEnabled
+      ? (screenTrack ?? null)
+      : (permissions.videoEnabled ? cameraTrack : null);
+    const activeAudioTrack = permissions.audioEnabled
+      ? (stream.getAudioTracks()[0] ?? null)
+      : null;
+
+    for (const [peerId, pc] of Object.entries(peerConnections.current)) {
+      const transceivers = pc.getTransceivers();
+      const videoTransceiver = transceivers.find((transceiver) => {
+        const senderKind = transceiver.sender.track?.kind;
+        const receiverKind = transceiver.receiver.track?.kind;
+        return senderKind === 'video' || receiverKind === 'video';
+      }) ?? null;
+      const audioTransceiver = transceivers.find((transceiver) => {
+        const senderKind = transceiver.sender.track?.kind;
+        const receiverKind = transceiver.receiver.track?.kind;
+        return senderKind === 'audio' || receiverKind === 'audio';
+      }) ?? null;
+
+      const videoSender = videoTransceiver?.sender ?? null;
+      const audioSender = audioTransceiver?.sender ?? null;
+      let changed = false;
+
+      if (videoSender) {
+        if (videoSender.track !== activeVideoTrack) {
+          await videoSender.replaceTrack(activeVideoTrack);
+          changed = true;
+        }
+      } else if (activeVideoTrack) {
+        pc.addTrack(activeVideoTrack, stream);
+        changed = true;
+      }
+
+      if (audioSender) {
+        if (audioSender.track !== activeAudioTrack) {
+          await audioSender.replaceTrack(activeAudioTrack);
+          changed = true;
+        }
+      } else if (activeAudioTrack) {
+        pc.addTrack(activeAudioTrack, stream);
+        changed = true;
+      }
+
+      if (changed) {
+        await sendToPeer(peerId, pc);
+      }
+    }
+  }, [isHost, sendToPeer]);
+
   const notifyStudentMediaState = useCallback(() => {
     if (isHost) {
       return;
@@ -520,12 +590,12 @@ export const useLiveSession = (
     }
   }, [localStream]);
 
-  const toggleMedia = useCallback(async (type: 'video' | 'audio') => {
+  const toggleMedia = useCallback(async (type: 'video' | 'audio', forceEnabled?: boolean) => {
     let stream = localStream;
     if (!stream) {
-      stream = await getMedia(true, true);
+      stream = await getMedia(type === 'video', type === 'audio');
       if (!stream) {
-        return;
+        return false;
       }
     }
 
@@ -534,16 +604,17 @@ export const useLiveSession = (
     if (!track) {
       track = await ensureStudentTrack(type);
       if (!track) {
-        return;
+        return false;
       }
     }
 
-    track.enabled = !track.enabled;
+    track.enabled = typeof forceEnabled === 'boolean' ? forceEnabled : !track.enabled;
 
     if (!isHost) {
       await syncStudentOutboundTracks();
       notifyStudentMediaState();
     }
+    return true;
   }, [ensureStudentTrack, getMedia, isHost, localStream, notifyStudentMediaState, syncStudentOutboundTracks]);
 
   const startScreenShare = async () => {
@@ -679,6 +750,12 @@ export const useLiveSession = (
       void connectNewlyAdmittedPeers();
     }
   }, [isHost, participants, connectNewlyAdmittedPeers]);
+
+  useEffect(() => {
+    if (isHost) {
+      void syncHostOutboundTracks();
+    }
+  }, [isHost, hostMediaPermissions, localStream, participants, syncHostOutboundTracks]);
 
   // NOTE: syncStudentOutboundTracks is called explicitly from toggleMedia,
   // startScreenShare, and stopScreenShare. The onnegotiationneeded handler on

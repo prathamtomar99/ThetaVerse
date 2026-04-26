@@ -13,7 +13,7 @@ import java.util.Map;
 public class GhostController {
 
     private final GhostService ghostService;
-
+   
     @GetMapping("/roadmap/{roadmapId}")
     public ResponseEntity<Map<String, Object>> getGhostPace(@PathVariable Long roadmapId) {
         return ResponseEntity.ok(ghostService.getGhostPace(roadmapId));

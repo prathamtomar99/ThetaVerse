@@ -163,7 +163,8 @@ public class InterviewSimulationService {
         }
 
         @Transactional
-        public InterviewerProfileResponse upsertInterviewerProfile(Long interviewerId, CreateInterviewerProfileRequest request) {
+        public InterviewerProfileResponse upsertInterviewerProfile(Long interviewerId,
+                        CreateInterviewerProfileRequest request) {
                 User interviewer = userRepository.findById(interviewerId)
                                 .orElseThrow(() -> new RuntimeException("Interviewer not found"));
                 if (interviewer.getRole() != Role.INTERVIEWER) {
@@ -194,7 +195,8 @@ public class InterviewSimulationService {
                 return userRepository.findByRoleOrderByNameAsc(Role.INTERVIEWER)
                                 .stream()
                                 .map(interviewer -> {
-                                        InterviewerProfile profile = interviewerProfileRepository.findByUserId(interviewer.getId())
+                                        InterviewerProfile profile = interviewerProfileRepository
+                                                        .findByUserId(interviewer.getId())
                                                         .orElse(InterviewerProfile.builder().user(interviewer).build());
                                         return mapInterviewerProfile(profile);
                                 })
@@ -202,7 +204,8 @@ public class InterviewSimulationService {
         }
 
         @Transactional
-        public InterviewAvailabilitySlotResponse createAvailabilitySlot(Long interviewerId, CreateAvailabilitySlotRequest request) {
+        public InterviewAvailabilitySlotResponse createAvailabilitySlot(Long interviewerId,
+                        CreateAvailabilitySlotRequest request) {
                 User interviewer = userRepository.findById(interviewerId)
                                 .orElseThrow(() -> new RuntimeException("Interviewer not found"));
                 if (interviewer.getRole() != Role.INTERVIEWER) {
@@ -213,7 +216,8 @@ public class InterviewSimulationService {
                                 !request.getEndTime().isAfter(request.getStartTime())) {
                         throw new RuntimeException("Invalid slot time range");
                 }
-                if (request.getGoogleMeetLink() == null || !request.getGoogleMeetLink().startsWith("https://meet.google.com/")) {
+                if (request.getGoogleMeetLink() == null
+                                || !request.getGoogleMeetLink().startsWith("https://meet.google.com/")) {
                         throw new RuntimeException("Google Meet link must start with https://meet.google.com/");
                 }
 
@@ -272,7 +276,8 @@ public class InterviewSimulationService {
                                 session.getTargetProfile().getRoleName(),
                                 session.getTargetProfile().getRoleName(),
                                 session.getTargetProfile().getCompanyName(),
-                                session.getInterviewerPersona() != null ? session.getInterviewerPersona().getBaseMood() : "Medium",
+                                session.getInterviewerPersona() != null ? session.getInterviewerPersona().getBaseMood()
+                                                : "Medium",
                                 session.getResumeText() != null ? session.getResumeText() : "None provided",
                                 activeTopic,
                                 recentQuestions.isEmpty() ? "none" : String.join(" | ", recentQuestions));
@@ -321,7 +326,13 @@ public class InterviewSimulationService {
                                                 "Current posture feedback: '%s'. " +
                                                 "Provide a brief evaluation of technical depth, structure, posture, and communication. "
                                                 +
-                                                "Return actionable feedback only.",
+                                                "Return the feedback in this exact format: " +
+                                                "Semantic Accuracy: <0-100>\n" +
+                                                "Technical Depth: <0-100>\n" +
+                                                "Conversational Clarity: <0-100>\n" +
+                                                "Visual Focus: <0-100>\n" +
+                                                "Postural Stability: <0-100>\n" +
+                                                "Summary: <actionable feedback>.",
                                 question.getQuestionText(),
                                 request.getUserAnswer(),
                                 request.getPostureFeedback() != null ? request.getPostureFeedback() : "Not available");
@@ -376,7 +387,17 @@ public class InterviewSimulationService {
                                 .collect(Collectors.joining("\n"));
 
                 String finalPrompt = String.format(
-                                "Review this interview transcript and provide a final evaluation with strengths, gaps, posture notes, and next steps. Transcript:\n%s",
+                                "Review this interview transcript and provide a final evaluation with strengths, gaps, posture notes, and next steps. "
+                                                +
+                                                "Return the response in this exact format: " +
+                                                "Semantic Accuracy: <0-100>\n" +
+                                                "Technical Depth: <0-100>\n" +
+                                                "Conversational Clarity: <0-100>\n" +
+                                                "Visual Focus: <0-100>\n" +
+                                                "Postural Stability: <0-100>\n" +
+                                                "Final Score: <0-100>\n" +
+                                                "Performance Level: <EXCELLENT|GOOD|AVERAGE|NEEDS IMPROVEMENT>\n" +
+                                                "Summary: <short narrative with strengths, gaps, and next steps>.\n\nTranscript:\n%s",
                                 transcript);
 
                 String finalEvaluation = chatClient.prompt()
@@ -438,8 +459,12 @@ public class InterviewSimulationService {
                                 .scheduledAt(session.getScheduledAt())
                                 .durationMinutes(session.getDurationMinutes())
                                 .resumeText(session.getResumeText())
-                                .interviewerName(session.getInterviewerUser() != null ? session.getInterviewerUser().getName() : null)
-                                .interviewerEmail(session.getInterviewerUser() != null ? session.getInterviewerUser().getEmail() : null)
+                                .interviewerName(session.getInterviewerUser() != null
+                                                ? session.getInterviewerUser().getName()
+                                                : null)
+                                .interviewerEmail(session.getInterviewerUser() != null
+                                                ? session.getInterviewerUser().getEmail()
+                                                : null)
                                 .meetingLink(session.getExternalMeetingLink())
                                 .build();
         }

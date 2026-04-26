@@ -100,6 +100,8 @@ export default function InterviewUI() {
   const poseRef = useRef<any>(null);
   const cameraRef = useRef<any>(null);
   const activeSessionRef = useRef(true);
+  const inputMessageRef = useRef("");
+  const dictatedFinalRef = useRef("");
 
   const currentTopic = useMemo(() => {
     return topics[currentTopicIndex] || topics[0] || "Technical";
@@ -108,6 +110,10 @@ export default function InterviewUI() {
   const appendLog = (role: TranscriptEntry["role"], content: string) => {
     setLogs((prev) => [...prev, { role, content }]);
   };
+
+  useEffect(() => {
+    inputMessageRef.current = inputMessage;
+  }, [inputMessage]);
 
   useEffect(() => {
     const loadVoices = () => {
@@ -202,15 +208,36 @@ export default function InterviewUI() {
       recognition.lang = "en-US";
 
       recognition.onstart = () => {
+        dictatedFinalRef.current = inputMessageRef.current.trim();
         setIsRecording(true);
       };
 
       recognition.onresult = (event: any) => {
-        let transcript = "";
+        let finalizedChunk = "";
+        let interimChunk = "";
+
         for (let i = event.resultIndex; i < event.results.length; i += 1) {
-          transcript += event.results[i][0].transcript;
+          const segment = (event.results[i]?.[0]?.transcript || "").trim();
+          if (!segment) {
+            continue;
+          }
+
+          if (event.results[i].isFinal) {
+            finalizedChunk += `${segment} `;
+          } else {
+            interimChunk += `${segment} `;
+          }
         }
-        setInputMessage(transcript.trim());
+
+        if (finalizedChunk.trim()) {
+          dictatedFinalRef.current =
+            `${dictatedFinalRef.current} ${finalizedChunk}`.trim();
+        }
+
+        const nextInput = `${dictatedFinalRef.current} ${interimChunk}`.trim();
+        if (nextInput) {
+          setInputMessage(nextInput);
+        }
       };
 
       recognition.onerror = (event: any) => {

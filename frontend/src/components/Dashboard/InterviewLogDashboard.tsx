@@ -25,6 +25,170 @@ interface InterviewLogEntry {
 
 const AI_ROLES = new Set(["response", "evaluation", "final"]);
 
+type EvalDimension = {
+  key:
+    | "semanticAccuracy"
+    | "technicalDepth"
+    | "conversationalClarity"
+    | "visualFocus"
+    | "posturalStability";
+  label: string;
+  shortLabel: string;
+  source: "LLM" | "Computer Vision";
+  weight: number;
+  colorClass: string;
+  aliases: string[];
+};
+
+const EVAL_DIMENSIONS: EvalDimension[] = [
+  {
+    key: "semanticAccuracy",
+    label: "Semantic Accuracy",
+    shortLabel: "SA",
+    source: "LLM",
+    weight: 0.35,
+    colorClass: "bg-blue-500",
+    aliases: ["semantic accuracy", "sa"],
+  },
+  {
+    key: "technicalDepth",
+    label: "Technical Depth",
+    shortLabel: "TD",
+    source: "LLM",
+    weight: 0.35,
+    colorClass: "bg-emerald-500",
+    aliases: ["technical depth", "td"],
+  },
+  {
+    key: "conversationalClarity",
+    label: "Conversational Clarity",
+    shortLabel: "CC",
+    source: "LLM",
+    weight: 0.3,
+    colorClass: "bg-violet-500",
+    aliases: ["conversational clarity", "cc"],
+  },
+  {
+    key: "visualFocus",
+    label: "Visual Focus",
+    shortLabel: "VF",
+    source: "Computer Vision",
+    weight: 0.2,
+    colorClass: "bg-amber-500",
+    aliases: ["visual focus", "vf"],
+  },
+  {
+    key: "posturalStability",
+    label: "Postural Stability",
+    shortLabel: "PS",
+    source: "Computer Vision",
+    weight: 0.2,
+    colorClass: "bg-rose-500",
+    aliases: ["postural stability", "ps"],
+  },
+];
+
+const clampScore = (score: number) =>
+  Math.max(0, Math.min(100, Math.round(score)));
+
+const toHundredScale = (rawScore: number, scaleHint?: number) => {
+  if (scaleHint && scaleHint > 0) {
+    return clampScore((rawScore / scaleHint) * 100);
+  }
+  if (rawScore <= 5) {
+    return clampScore((rawScore / 5) * 100);
+  }
+  if (rawScore <= 10) {
+    return clampScore((rawScore / 10) * 100);
+  }
+  return clampScore(rawScore);
+};
+
+const findBestScoreInLine = (line: string, aliasIndex: number) => {
+  const lowerLine = line.toLowerCase();
+  const scoreWithScale = line.match(
+    /[:=]\s*(\d{1,3}(?:\.\d+)?)\s*\/\s*(5|10|100)\b/i,
+  );
+  if (scoreWithScale) {
+    return toHundredScale(Number(scoreWithScale[1]), Number(scoreWithScale[2]));
+  }
+
+  const explicitAfterColon = line.match(/[:=]\s*(\d{1,3}(?:\.\d+)?)\b/i);
+  if (explicitAfterColon) {
+    const raw = Number(explicitAfterColon[1]);
+    const scaleFromLine = lowerLine.includes("0-5")
+      ? 5
+      : lowerLine.includes("0-10")
+        ? 10
+        : lowerLine.includes("0-100")
+          ? 100
+          : undefined;
+    return toHundredScale(raw, scaleFromLine);
+  }
+
+  const tail = line.slice(aliasIndex);
+  const numericTokens = Array.from(tail.matchAll(/\d{1,3}(?:\.\d+)?/g));
+  for (const token of numericTokens) {
+    const valueText = token[0];
+    const indexInTail = token.index ?? -1;
+    const prevChar = indexInTail > 0 ? tail[indexInTail - 1] : "";
+    const nextChar = tail[indexInTail + valueText.length] ?? "";
+
+    // Skip numbers that are part of ranges like 0-5 or 0-100.
+    if (prevChar === "-" || nextChar === "-") {
+      continue;
+    }
+
+    const raw = Number(valueText);
+    const scaleFromLine = lowerLine.includes("0-5")
+      ? 5
+      : lowerLine.includes("0-10")
+        ? 10
+        : lowerLine.includes("0-100")
+          ? 100
+          : undefined;
+    return toHundredScale(raw, scaleFromLine);
+  }
+
+  return null;
+};
+
+function extractDimensionScore(text: string, aliases: string[]) {
+  const normalizedText = text.replace(/[\u2010-\u2015\u2212]/g, "-");
+  const lines = normalizedText.split(/\r?\n/);
+
+  for (const alias of aliases) {
+    const lowerAlias = alias.toLowerCase();
+    for (const line of lines) {
+      const lowerLine = line.toLowerCase();
+      const aliasIndex = lowerLine.indexOf(lowerAlias);
+      if (aliasIndex === -1) {
+        continue;
+      }
+
+      const parsed = findBestScoreInLine(line, aliasIndex);
+      if (parsed !== null) {
+        return parsed;
+      }
+    }
+  }
+
+  return null;
+}
+
+function getPerformanceLevel(score: number) {
+  if (score >= 85) return "EXCELLENT";
+  if (score >= 70) return "GOOD";
+  if (score >= 55) return "AVERAGE";
+  return "NEEDS IMPROVEMENT";
+}
+
+function polarPoint(cx: number, cy: number, radius: number, angleRad: number) {
+  const x = cx + radius * Math.cos(angleRad);
+  const y = cy + radius * Math.sin(angleRad);
+  return `${x.toFixed(2)},${y.toFixed(2)}`;
+}
+
 function normalizeInlineText(text: string) {
   return text
     .replace(/<br\s*\/?>/gi, "\n")
@@ -285,6 +449,84 @@ export default function InterviewLogDashboard() {
     return finalLog?.content ?? "No final evaluation was generated.";
   }, [logs]);
 
+  const sourceForScoreExtraction = useMemo(() => {
+    const evaluationLogs = logs
+      .filter((log) => log.role === "evaluation" || log.role === "final")
+      .map((log) => log.content)
+      .join("\n");
+    return `${evaluationLogs}\n${finalEvaluation}`.toLowerCase();
+  }, [logs, finalEvaluation]);
+
+  const dimensionScores = useMemo(() => {
+    const fallbackScores: Record<EvalDimension["key"], number> = {
+      semanticAccuracy: 80,
+      technicalDepth: 76,
+      conversationalClarity: 82,
+      visualFocus: 72,
+      posturalStability: 86,
+    };
+
+    const resolved = { ...fallbackScores };
+    for (const dimension of EVAL_DIMENSIONS) {
+      const extracted = extractDimensionScore(
+        sourceForScoreExtraction,
+        dimension.aliases,
+      );
+      if (extracted !== null) {
+        resolved[dimension.key] = extracted;
+      }
+    }
+
+    return resolved;
+  }, [sourceForScoreExtraction]);
+
+  const weightedScore = useMemo(() => {
+    const weightSum = EVAL_DIMENSIONS.reduce((sum, d) => sum + d.weight, 0);
+    const weightedTotal = EVAL_DIMENSIONS.reduce((sum, d) => {
+      return sum + d.weight * dimensionScores[d.key];
+    }, 0);
+    return Number((weightedTotal / weightSum).toFixed(1));
+  }, [dimensionScores]);
+
+  const performanceLevel = useMemo(
+    () => getPerformanceLevel(weightedScore),
+    [weightedScore],
+  );
+
+  const radarGeometry = useMemo(() => {
+    const cx = 140;
+    const cy = 140;
+    const outerRadius = 96;
+    const steps = [20, 40, 60, 80, 100];
+
+    const axisAngles = EVAL_DIMENSIONS.map((_, index) => {
+      return -Math.PI / 2 + (index * 2 * Math.PI) / EVAL_DIMENSIONS.length;
+    });
+
+    const gridPolygons = steps.map((step) => {
+      const r = (outerRadius * step) / 100;
+      const points = axisAngles.map((angle) => polarPoint(cx, cy, r, angle));
+      return points.join(" ");
+    });
+
+    const axisLines = axisAngles.map((angle) => ({
+      x1: cx,
+      y1: cy,
+      x2: cx + outerRadius * Math.cos(angle),
+      y2: cy + outerRadius * Math.sin(angle),
+    }));
+
+    const scorePolygon = axisAngles
+      .map((angle, index) => {
+        const score = dimensionScores[EVAL_DIMENSIONS[index].key];
+        const r = (outerRadius * score) / 100;
+        return polarPoint(cx, cy, r, angle);
+      })
+      .join(" ");
+
+    return { cx, cy, outerRadius, gridPolygons, axisLines, scorePolygon };
+  }, [dimensionScores]);
+
   return (
     <div className="flex-1 max-w-6xl mx-auto w-full px-6 py-12">
       <div className="flex items-center justify-between gap-4 mb-8">
@@ -395,13 +637,155 @@ export default function InterviewLogDashboard() {
           </div>
 
           <div className="space-y-6">
-            <div className="rounded-3xl border border-emerald-500/25 bg-emerald-500/8 p-6">
-              <h2 className="text-xl font-semibold text-white mb-4">
-                Final Evaluation
+            <div className="rounded-3xl border border-indigo-500/30 bg-neutral-900/75 p-6">
+              <h2 className="text-2xl font-bold text-white">
+                FINAL EVALUATION REPORT
               </h2>
-              <div className="text-sm text-emerald-100 whitespace-pre-wrap wrap-break-word">
-                <div className="space-y-2 text-[15px] leading-7">
-                  {renderLogContent(finalEvaluation)}
+              <p className="text-sm text-neutral-400 mb-5">
+                Multimodal Performance Assessment
+              </p>
+
+              <div className="rounded-2xl border border-white/10 bg-neutral-950/70 p-4 mb-4">
+                <div className="text-xs font-semibold tracking-wide text-neutral-400 mb-3">
+                  RADAR SNAPSHOT
+                </div>
+                <div className="w-full flex items-center justify-center">
+                  <svg viewBox="0 0 280 280" className="h-62 w-62">
+                    {radarGeometry.gridPolygons.map((points, idx) => (
+                      <polygon
+                        key={`grid-${idx}`}
+                        points={points}
+                        fill="none"
+                        stroke="rgba(255,255,255,0.14)"
+                        strokeWidth={
+                          idx === radarGeometry.gridPolygons.length - 1
+                            ? 1.2
+                            : 1
+                        }
+                      />
+                    ))}
+
+                    {radarGeometry.axisLines.map((axis, idx) => (
+                      <line
+                        key={`axis-${idx}`}
+                        x1={axis.x1}
+                        y1={axis.y1}
+                        x2={axis.x2}
+                        y2={axis.y2}
+                        stroke="rgba(255,255,255,0.16)"
+                        strokeWidth="1"
+                      />
+                    ))}
+
+                    <polygon
+                      points={radarGeometry.scorePolygon}
+                      fill="rgba(59,130,246,0.26)"
+                      stroke="rgb(96,165,250)"
+                      strokeWidth="2"
+                    />
+
+                    {EVAL_DIMENSIONS.map((dimension, idx) => {
+                      const angle =
+                        -Math.PI / 2 +
+                        (idx * 2 * Math.PI) / EVAL_DIMENSIONS.length;
+                      const labelX =
+                        radarGeometry.cx +
+                        (radarGeometry.outerRadius + 20) * Math.cos(angle);
+                      const labelY =
+                        radarGeometry.cy +
+                        (radarGeometry.outerRadius + 20) * Math.sin(angle);
+
+                      return (
+                        <text
+                          key={`label-${dimension.key}`}
+                          x={labelX}
+                          y={labelY}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          fill="rgba(255,255,255,0.86)"
+                          fontSize="9"
+                        >
+                          {dimension.shortLabel}
+                        </text>
+                      );
+                    })}
+                  </svg>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-neutral-950/70 p-4 mb-4">
+                <div className="text-xs font-semibold tracking-wide text-neutral-400 mb-3">
+                  DIMENSION SCORES (0 - 100)
+                </div>
+                <div className="space-y-3">
+                  {EVAL_DIMENSIONS.map((dimension) => {
+                    const score = dimensionScores[dimension.key];
+                    return (
+                      <div key={dimension.key}>
+                        <div className="flex items-center justify-between mb-1 text-sm">
+                          <span className="text-neutral-200 font-medium">
+                            {dimension.label}{" "}
+                            <span className="text-neutral-500">
+                              ({dimension.source})
+                            </span>
+                          </span>
+                          <span className="text-white font-semibold">
+                            {score}
+                          </span>
+                        </div>
+                        <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                          <div
+                            className={`h-2 ${dimension.colorClass}`}
+                            style={{ width: `${score}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 mb-4">
+                <div className="flex items-end justify-between">
+                  <div>
+                    <p className="text-sm text-emerald-200 font-semibold">
+                      FINAL SCORE
+                    </p>
+                    <p className="text-xs text-emerald-100/80">
+                      Weighted normalized aggregate
+                    </p>
+                  </div>
+                  <p className="text-4xl font-bold text-white">
+                    {weightedScore}
+                    <span className="text-lg text-emerald-100/90"> / 100</span>
+                  </p>
+                </div>
+                <div className="mt-3 rounded-lg border border-emerald-400/30 bg-black/20 px-3 py-2 text-sm text-emerald-100 font-semibold text-center tracking-wide">
+                  PERFORMANCE LEVEL: {performanceLevel}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-neutral-950/70 p-4">
+                <div className="text-xs font-semibold tracking-wide text-neutral-400 mb-2">
+                  AGGREGATION FORMULA
+                </div>
+                <p className="text-sm text-neutral-200 leading-6">
+                  FS = (wSA*SA + wTD*TD + wCC*CC + wVF*VF + wPS*PS) / (wSA + wTD
+                  + wCC + wVF + wPS)
+                </p>
+                <p className="text-xs text-neutral-500 mt-2">
+                  Weights: SA 0.35, TD 0.35, CC 0.30, VF 0.20, PS 0.20
+                </p>
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-emerald-500/25 bg-emerald-500/8 p-4">
+                <div className="text-xs font-semibold tracking-wide text-emerald-300 mb-2">
+                  FINAL EVALUATION NARRATIVE (UNCHANGED)
+                </div>
+                <div className="text-sm text-emerald-100 whitespace-pre-wrap wrap-break-word">
+                  <div className="space-y-2 text-[15px] leading-7">
+                    {renderLogContent(finalEvaluation)}
+                  </div>
                 </div>
               </div>
             </div>

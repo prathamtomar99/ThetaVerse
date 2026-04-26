@@ -69,6 +69,12 @@ const InterviewerDashboard = () => {
     }
   }, [sessionCapacity?.capacity]);
 
+  useEffect(() => {
+    if (selfVideoRef.current && localStream) {
+      selfVideoRef.current.srcObject = localStream;
+    }
+  }, [localStream]);
+
   const waitingParticipants = participants.filter(
     (p) => p.role === "STUDENT" && p.status === "WAITING",
   );
@@ -89,18 +95,26 @@ const InterviewerDashboard = () => {
   };
 
   const handleToggleCamera = async () => {
-    await toggleMedia("video");
+    const nextEnabled = !hostMediaPermissions.videoEnabled;
+    const success = await toggleMedia("video", nextEnabled);
+    if (!success) {
+      return;
+    }
     updateHostVisibilityPermissions({
       ...hostMediaPermissions,
-      videoEnabled: !hostMediaPermissions.videoEnabled,
+      videoEnabled: nextEnabled,
     });
   };
 
   const handleToggleAudio = async () => {
-    await toggleMedia("audio");
+    const nextEnabled = !hostMediaPermissions.audioEnabled;
+    const success = await toggleMedia("audio", nextEnabled);
+    if (!success) {
+      return;
+    }
     updateHostVisibilityPermissions({
       ...hostMediaPermissions,
-      audioEnabled: !hostMediaPermissions.audioEnabled,
+      audioEnabled: nextEnabled,
     });
   };
 
