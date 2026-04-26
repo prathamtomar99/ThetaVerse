@@ -25,7 +25,7 @@ The project is a comprehensive Interview Preparation and Learning Roadmap tracki
 
 - **Comprehensive Testing:** Broader unit, integration, and E2E coverage is still needed across backend and frontend.
 - **Hardware Focus Tracking:** Full client-side CV-based focus tracking remains partially integrated.
-- **CI/CD Hardening:** Automated pipelines for lint, test, build, and deployment are not fully mature.
+- **CI/CD Hardening:* * Automated pipelines for lint, test, build, and deployment are not fully mature.
 - **Operational Observability:** Centralized metrics/tracing and structured alerting can be further improved.
 
 ## Known Issues / Recent Stabilizations

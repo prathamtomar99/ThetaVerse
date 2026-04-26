@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { API_BASE_URL } from "../../config/network";
 
 const LiveSetup = () => {
   const [hostName, setHostName] = useState("Interviewer");
@@ -10,7 +11,7 @@ const LiveSetup = () => {
     setLoading(true);
     try {
       const response = await fetch(
-        "http://localhost:8080/api/live-sessions/create",
+        `${API_BASE_URL}/live-sessions/create`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
