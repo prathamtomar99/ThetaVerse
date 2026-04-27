@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { backendApiUrl } from "../../config/backend";
 
 const LiveSetup = () => {
   const [hostName, setHostName] = useState("Interviewer");
@@ -9,14 +10,11 @@ const LiveSetup = () => {
   const handleCreateSession = async () => {
     setLoading(true);
     try {
-      const response = await fetch(
-        "http://localhost:8080/api/live-sessions/create",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ hostName }),
-        },
-      );
+      const response = await fetch(`${backendApiUrl}/live-sessions/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hostName }),
+      });
       const data = await response.json();
       if (data.sessionCode && data.hostId) {
         navigate(`/live/host/${data.hostId}/${data.sessionCode}`);

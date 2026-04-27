@@ -1,0 +1,9 @@
+name : interview-prep-db
+
+internal DB URL - postgresql://interview_prep_db_284m_user:bpopVbYjtOUItj2uBFwNqHXr7QYFWtlo@dpg-d7nhuaosfn5c73e2rptg-a/interview_prep_db_284m
+hostname -dpg-d7nhuaosfn5c73e2rptg-a
+port - 5432
+database - interview_prep_db_284m
+username - interview_prep_db_284m_user
+password - bpopVbYjtOUItj2uBFwNqHXr7QYFWtlo
+PSQL comand - PGPASSWORD=bpopVbYjtOUItj2uBFwNqHXr7QYFWtlo psql -h dpg-d7nhuaosfn5c73e2rptg-a.oregon-postgres.render.com -U interview_prep_db_284m_user interview_prep_db_284m

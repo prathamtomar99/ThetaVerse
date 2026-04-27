@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { backendWsUrl } from '../config/backend';
 
 const ICE_SERVERS: RTCConfiguration = {
   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
@@ -256,7 +257,7 @@ export const useLiveSession = (
     if (!sessionCode) return;
     if (isHost && !hostId) return;
 
-    const ws = new WebSocket('ws://localhost:8080/ws/live');
+    const ws = new WebSocket(backendWsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {

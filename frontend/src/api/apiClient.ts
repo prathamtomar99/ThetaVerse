@@ -1,9 +1,10 @@
 import axios from 'axios';
+import { backendApiUrl } from '../config/backend';
 import { logExecution } from '../utils/executionLogger';
 
 // Create an Axios instance with base configuration
 const apiClient = axios.create({
-    baseURL: 'http://localhost:8080/api', // Adjust if your backend port is different
+    baseURL: backendApiUrl,
     headers: {
         'Content-Type': 'application/json',
     },
